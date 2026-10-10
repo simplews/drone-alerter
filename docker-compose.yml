@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+
   app:
     build: .
     container_name: if-drone-alert
@@ -12,6 +11,11 @@ services:
       - TELETHON_API_HASH=${TELETHON_API_HASH}
       - TELETHON_STRING_SESSION=${TELETHON_STRING_SESSION}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DATABASE_URL=sqlite:///data/app.db
+      - REFERENCE_DIR=/app/data/reference
+      - LEARNING_DB_PATH=/app/data/learning.db
+      - SUBSCRIBERS_DB_PATH=/app/data/subscribers.db
+      - API_HOST=0.0.0.0
+      - API_PORT=8080
     volumes:
       - ./data:/app/data
+

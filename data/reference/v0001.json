@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-10-10T20:38:30+00:00",
+  "status": "active",
+  "points": {
+    "pishchanka": {
+      "id": "pishchanka",
+      "names": [
+        "піщанка",
+        "піщанку",
+        "піщанці"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 35.0,
+      "eta_max": 48.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "vendychany": {
+      "id": "vendychany",
+      "names": [
+        "вендичани",
+        "вендичанах",
+        "вендичан"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 29.0,
+      "eta_max": 41.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "nova_ushytsia": {
+      "id": "nova_ushytsia",
+      "names": [
+        "нова ушиця",
+        "нову ушицю",
+        "новій ушиці",
+        "н. ушиця",
+        "н.ушиця",
+        "ушиця",
+        "ушицю"
+      ],
+      "level": 1,
+      "distance_km": 190.0,
+      "eta_min": 25.0,
+      "eta_max": 33.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "stara_ushytsia": {
+      "id": "stara_ushytsia",
+      "names": [
+        "стара ушиця",
+        "стару ушицю",
+        "старій ушиці"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 23.0,
+      "eta_max": 36.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "dunaivtsi": {
+      "id": "dunaivtsi",
+      "names": [
+        "дунаївці",
+        "дунаївцях",
+        "дунаївців"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 20.0,
+      "eta_max": 33.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "tomashpil": {
+      "id": "tomashpil",
+      "names": [
+        "томашпіль",
+        "томашполі",
+        "томашполя"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "kamianets_podilskyi": {
+      "id": "kamianets_podilskyi",
+      "names": [
+        "камʼянець-подільський",
+        "кам'янець-подільський",
+        "камянець",
+        "камʼянець",
+        "кам'янці",
+        "камʼянці",
+        "камʼянця",
+        "кам'янця"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 17.0,
+      "eta_max": 29.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "skala_podilska": {
+      "id": "skala_podilska",
+      "names": [
+        "скала-подільська",
+        "скалу-подільську",
+        "скалі-подільській",
+        "скала"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 13.0,
+      "eta_max": 23.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "tovste": {
+      "id": "tovste",
+      "names": [
+        "товсте",
+        "товстому",
+        "товстого"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 8.0,
+      "eta_max": 17.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "borshchiv": {
+      "id": "borshchiv",
+      "names": [
+        "борщів",
+        "борщеві",
+        "борщєві",
+        "борщова",
+        "борщева"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 12.0,
+      "eta_max": 21.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "chernelytsia": {
+      "id": "chernelytsia",
+      "names": [
+        "чернелиця",
+        "чернелицю",
+        "чернелиці",
+        "чернелицею"
+      ],
+      "level": 3,
+      "distance_km": 54.0,
+      "eta_min": 5.0,
+      "eta_max": 13.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "tlumach": {
+      "id": "tlumach",
+      "names": [
+        "тлумач",
+        "тлумачі",
+        "тлумачем",
+        "тлумачу",
+        "тлумача"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 4.0,
+      "eta_max": 8.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "tysmenytsia": {
+      "id": "tysmenytsia",
+      "names": [
+        "тисмениця",
+        "тисменицю",
+        "тисмениці"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 0.0,
+      "eta_max": 3.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    },
+    "khryplyn": {
+      "id": "khryplyn",
+      "names": [
+        "хриплин",
+        "хриплині",
+        "хриплину"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0
+    }
+  },
+  "speed_kmh": [
+    340.0,
+    450.0
+  ],
+  "post_lag_min": [
+    1.0,
+    3.0
+  ],
+  "target_keywords": [
+    "реактивна герань",
+    "реактивні герані",
+    "реактивний шахед",
+    "реактивні шахеди",
+    "реактивний бпла",
+    "реактивні бпла",
+    "шахед-238",
+    "геран-3",
+    "реактив",
+    "джет"
+  ],
+  "cancel_keywords": [
+    "вибух",
+    "збит",
+    "локаційно втрачен",
+    "дорозвідка",
+    "відбій",
+    "на рівне",
+    "на рівненщину",
+    "на волинь",
+    "на житомир",
+    "на житомирщину",
+    "відбій на заході"
+  ],
+  "stopwords": [
+    "україна",
+    "увага",
+    "оновлення",
+    "upd",
+    "захід",
+    "схід",
+    "північ",
+    "південь",
+    "повітряні",
+    "сили",
+    "реактивна",
+    "реактивний",
+    "реактивні",
+    "герань",
+    "шахед",
+    "бпла",
+    "іф",
+    "франківськ",
+    "івано-франківськ",
+    "тернопіль",
+    "хмельницький",
+    "волинь",
+    "буковина",
+    "поділля"
+  ],
+  "changelog": [
+    "Початкова версія з src/nlp/dictionary.py (дані PRD, 8 епізодів 8–10.10.2026)"
+  ],
+  "metrics": {}
+}
