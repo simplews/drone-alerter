@@ -7,9 +7,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from .calibration import CalibrationConfig, base_rates, calibrate_point, evaluate, fit_speed
+from .calibration import (
+    CalibrationConfig,
+    base_rates,
+    calibrate_point,
+    evaluate,
+    fit_speed,
+)
 from .reference import PointRef, ReferenceData, ReferenceRepository
 from .store import AliasCandidate, ArrivalObservation, LearningStore, OutcomeRow
 from .text import normalize
@@ -97,7 +103,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
 def _split_by_time(observations: list[ArrivalObservation], first_seen: dict[str, datetime],
                    holdout_fraction: float) -> tuple[list[ArrivalObservation], list[ArrivalObservation], int]:
     target_ids = sorted({o.target_id for o in observations}, key=lambda t: first_seen[t])
-    n_test = int(round(len(target_ids) * holdout_fraction))
+    n_test = round(len(target_ids) * holdout_fraction)
     test_ids = set(target_ids[len(target_ids) - n_test:]) if n_test else set()
     train = [o for o in observations if o.target_id not in test_ids]
     test = [o for o in observations if o.target_id in test_ids]
@@ -107,7 +113,7 @@ def _split_by_time(observations: list[ArrivalObservation], first_seen: dict[str,
 def retrain(store: LearningStore, repo: ReferenceRepository, cfg: LearningConfig | None = None,
             auto_promote: bool = False, now: datetime | None = None) -> RetrainReport:
     cfg = cfg or LearningConfig()
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     if store.has_open_targets(now, cfg.freeze_window_hours):
         return RetrainReport("skipped", "Є нерозмічені цілі за останні "

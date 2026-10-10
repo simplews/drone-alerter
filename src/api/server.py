@@ -1,12 +1,10 @@
 """FastAPI мікро-сервер для healthcheck, моніторингу активних цілей та UptimeRobot."""
 from __future__ import annotations
 
-import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI
-from pydantic import BaseModel
 
 app = FastAPI(title="IF Drone Alert API", version="1.1.0")
 
@@ -14,7 +12,7 @@ app = FastAPI(title="IF Drone Alert API", version="1.1.0")
 _tracker = None
 _ref_cache = None
 _listener = None
-_start_time = datetime.now(timezone.utc)
+_start_time = datetime.now(UTC)
 
 
 def set_app_state(tracker=None, ref_cache=None, listener=None):
@@ -27,7 +25,7 @@ def set_app_state(tracker=None, ref_cache=None, listener=None):
 @app.get("/health")
 def healthcheck() -> dict[str, Any]:
     """Перевірка життєздатності сервісу для UptimeRobot та Docker healthcheck."""
-    uptime_seconds = (datetime.now(timezone.utc) - _start_time).total_seconds()
+    uptime_seconds = (datetime.now(UTC) - _start_time).total_seconds()
     active_targets_count = len(_tracker.get_active_targets()) if _tracker else 0
     ref_version = _ref_cache.get().version if _ref_cache else 0
     is_connected = _listener.is_connected() if _listener else False

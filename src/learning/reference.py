@@ -10,7 +10,7 @@ import copy
 import json
 import os
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .text import normalize
@@ -72,7 +72,7 @@ class ReferenceData:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReferenceData":
+    def from_dict(cls, data: dict) -> ReferenceData:
         data = dict(data)
         points = {pid: PointRef(**p) for pid, p in data.pop("points", {}).items()}
         return cls(points=points, **data)
@@ -86,7 +86,7 @@ class ReferenceData:
                 index[normalize(name)] = pid
         return index
 
-    def clone_as_candidate(self) -> "ReferenceData":
+    def clone_as_candidate(self) -> ReferenceData:
         cand = copy.deepcopy(self)
         cand.parent_version = self.version
         cand.version = 0
@@ -98,7 +98,7 @@ class ReferenceData:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _atomic_write(path: Path, content: str) -> None:

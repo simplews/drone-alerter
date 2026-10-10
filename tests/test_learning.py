@@ -4,22 +4,38 @@
 """
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from src.learning.aliases import discover_aliases
-from src.learning.calibration import CalibrationConfig, base_rates, calibrate_point, evaluate
-from src.learning.pipeline import LearningConfig, build_candidate, diff, retrain
+from src.learning.calibration import (
+    CalibrationConfig,
+    base_rates,
+    calibrate_point,
+    evaluate,
+)
+from src.learning.pipeline import build_candidate, diff, retrain
 from src.learning.reference import (
-    STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_PENDING, STATUS_REJECTED,
-    ActiveReferenceCache, PointRef, ReferenceRepository, seed_from_dictionary,
+    STATUS_ACTIVE,
+    STATUS_ARCHIVED,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+    ActiveReferenceCache,
+    PointRef,
+    ReferenceRepository,
+    seed_from_dictionary,
 )
 from src.learning.store import (
-    OUTCOME_DIVERTED, OUTCOME_DOWNED, OUTCOME_REACHED, ArrivalObservation, LearningStore, OutcomeRow,
+    OUTCOME_DIVERTED,
+    OUTCOME_DOWNED,
+    OUTCOME_REACHED,
+    ArrivalObservation,
+    LearningStore,
+    OutcomeRow,
 )
 from src.learning.text import extract_place_candidates, normalize, phrases_match
 
-T0 = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 1, 18, 0, tzinfo=UTC)
 
 
 class TextTests(unittest.TestCase):

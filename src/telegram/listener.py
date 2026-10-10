@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Callable, Coroutine, List, Optional
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -24,8 +24,8 @@ class TelegramChannelListener:
         session_str: str,
         channels: list[str],
         on_post: Callable[[RawPost], Coroutine],
-        on_connection_lost: Optional[Callable[[], Coroutine]] = None,
-        on_connection_restored: Optional[Callable[[], Coroutine]] = None,
+        on_connection_lost: Callable[[], Coroutine] | None = None,
+        on_connection_restored: Callable[[], Coroutine] | None = None,
     ):
         self.api_id = api_id
         self.api_hash = api_hash
@@ -35,15 +35,15 @@ class TelegramChannelListener:
         self.on_connection_lost = on_connection_lost
         self.on_connection_restored = on_connection_restored
 
-        self.client: Optional[TelegramClient] = None
+        self.client: TelegramClient | None = None
         self._is_running = False
-        self._last_event_utc: Optional[datetime] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._last_event_utc: datetime | None = None
+        self._heartbeat_task: asyncio.Task | None = None
 
     def is_connected(self) -> bool:
         return bool(self.client and self.client.is_connected())
 
-    def last_event_time(self) -> Optional[datetime]:
+    def last_event_time(self) -> datetime | None:
         return self._last_event_utc
 
     async def start(self) -> None:
@@ -84,8 +84,8 @@ class TelegramChannelListener:
             chat = await event.get_chat()
             channel_name = getattr(chat, "username", None) or str(chat.id)
             text = event.raw_text or ""
-            posted_at = event.message.date.astimezone(timezone.utc)
-            self._last_event_utc = datetime.now(timezone.utc)
+            posted_at = event.message.date.astimezone(UTC)
+            self._last_event_utc = datetime.now(UTC)
 
             post = RawPost(
                 channel=channel_name,
@@ -95,8 +95,8 @@ class TelegramChannelListener:
                 is_edit=is_edit,
             )
             await self.on_post(post)
-        except Exception as exc:
-            logger.exception(f"Помилка при обробці події Telegram: {exc}")
+        except Exception:
+            logger.exception("Помилка при обробці події Telegram")
 
     async def _heartbeat_loop(self) -> None:
         """Перевіряє життєздатність сокета кожні 30 секунд."""
@@ -117,7 +117,7 @@ class TelegramChannelListener:
                         await self.on_connection_restored()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(f"Помилка в циклі heartbeat: {exc}")
 
     async def stop(self) -> None:

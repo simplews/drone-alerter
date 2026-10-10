@@ -16,7 +16,13 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from .reference import PointRef
-from .store import OUTCOME_DIVERTED, OUTCOME_DOWNED, OUTCOME_REACHED, ArrivalObservation, OutcomeRow
+from .store import (
+    OUTCOME_DIVERTED,
+    OUTCOME_DOWNED,
+    OUTCOME_REACHED,
+    ArrivalObservation,
+    OutcomeRow,
+)
 
 
 @dataclass

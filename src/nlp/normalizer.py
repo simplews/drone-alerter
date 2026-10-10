@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
 
 from src.engine.models import ActionType, ParsedMessage, RawPost
 from src.learning.reference import ActiveReferenceCache, ReferenceData
 from src.learning.text import normalize
-
 
 # Патерни кількості цілей
 _COUNT_PATTERNS = [

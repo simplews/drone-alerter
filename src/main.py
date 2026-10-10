@@ -4,17 +4,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import sys
-from pathlib import Path
 
 import uvicorn
 from aiogram import Bot
 
-from src.api.server import app as api_app, set_app_state
+from src.api.server import app as api_app
+from src.api.server import set_app_state
 from src.config import settings
-from src.engine.models import AlertEvent, RawPost
+from src.engine.models import RawPost
 from src.engine.tracker import TargetTracker
-from src.learning.reference import ActiveReferenceCache, ReferenceRepository, seed_from_dictionary
+from src.learning.reference import (
+    ActiveReferenceCache,
+    ReferenceRepository,
+    seed_from_dictionary,
+)
 from src.learning.store import LearningStore
 from src.nlp.normalizer import MessageNormalizer
 from src.telegram.bot import (

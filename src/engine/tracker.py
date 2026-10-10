@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from datetime import UTC, datetime, timedelta
 
 from src.engine.eta import calculate_eta, determine_level
 from src.engine.models import (
@@ -29,7 +28,7 @@ class TargetTracker:
     def __init__(
         self,
         ref_cache: ActiveReferenceCache,
-        store: Optional[LearningStore] = None,
+        store: LearningStore | None = None,
         dedup_window_minutes: float = 6.0,
         max_corridor_gap_minutes: float = 35.0,
     ):
@@ -47,14 +46,14 @@ class TargetTracker:
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
 
-    def _find_matching_target(self, point_id: str, posted_at: datetime) -> Optional[Target]:
+    def _find_matching_target(self, point_id: str, posted_at: datetime) -> Target | None:
         """Знаходить активну ціль, якій може належати повідомлення."""
         ref = self._get_ref()
         new_point = ref.points.get(point_id)
         if not new_point:
             return None
 
-        candidate: Optional[Target] = None
+        candidate: Target | None = None
         min_time_diff = timedelta.max
 
         for target in self._active_targets.values():
@@ -81,10 +80,9 @@ class TargetTracker:
                 else:
                     is_forward = (new_point.level >= last_point.level)
 
-            if is_same_point or is_forward:
-                if time_diff < min_time_diff:
-                    min_time_diff = time_diff
-                    candidate = target
+            if (is_same_point or is_forward) and time_diff < min_time_diff:
+                min_time_diff = time_diff
+                candidate = target
 
         return candidate
 
@@ -92,10 +90,10 @@ class TargetTracker:
         self,
         post: RawPost,
         parsed: ParsedMessage,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
     ) -> list[AlertEvent]:
         """Обробляє розпарсений пост, оновлює стан цілей і генерує сповіщення."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         ref = self._get_ref()
         alerts: list[AlertEvent] = []
 
@@ -198,9 +196,7 @@ class TargetTracker:
             should_alert = False
             is_update = False
 
-            if is_new_target:
-                should_alert = True
-            elif last_alerted is None or self._level_rank(target.level) > self._level_rank(last_alerted):
+            if is_new_target or last_alerted is None or self._level_rank(target.level) > self._level_rank(last_alerted):
                 should_alert = True
             elif last_alerted == target.level:
                 # Рівень той самий — не спамимо новим повідомленням, а оновлюємо наявне
@@ -360,6 +356,5 @@ class TargetTracker:
     def _cleanup_expired(self, now: datetime) -> None:
         """Переводить у застарілі цілі, за якими немає оновлень понад 45 хв."""
         for target in list(self._active_targets.values()):
-            if target.status == TargetStatus.ACTIVE:
-                if (now - target.last_seen_utc) > timedelta(minutes=45):
-                    target.status = TargetStatus.EXPIRED
+            if target.status == TargetStatus.ACTIVE and (now - target.last_seen_utc) > timedelta(minutes=45):
+                target.status = TargetStatus.EXPIRED

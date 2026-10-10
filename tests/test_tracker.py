@@ -1,15 +1,19 @@
 """Тести для трекера цілей (TargetTracker)."""
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from src.engine.models import AlertLevel, RawPost, TargetStatus
 from src.engine.tracker import TargetTracker
-from src.learning.reference import ActiveReferenceCache, ReferenceRepository, seed_from_dictionary
+from src.learning.reference import (
+    ActiveReferenceCache,
+    ReferenceRepository,
+    seed_from_dictionary,
+)
 from src.nlp.normalizer import MessageNormalizer
 
-T0 = datetime(2026, 10, 10, 21, 28, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 10, 21, 28, tzinfo=UTC)
 
 
 class TestTargetTracker(unittest.TestCase):

@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from src.engine.models import AlertEvent, AlertLevel
+from src.engine.models import AlertEvent
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ class SubscriberRepository:
             """)
 
     def add(self, chat_id: int) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with self.conn:
             self.conn.execute(
                 "INSERT OR IGNORE INTO subscribers(chat_id, joined_at_utc) VALUES (?, ?)",
@@ -119,7 +118,7 @@ async def broadcast_alert(bot: Bot, subscribers: SubscriberRepository, event: Al
                 parse_mode="Markdown",
                 disable_notification=event.is_silent,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning(f"Не вдалося надіслати сповіщення {chat_id}: {exc}")
 
 
@@ -134,5 +133,5 @@ async def broadcast_system_warning(bot: Bot, subscribers: SubscriberRepository, 
                 parse_mode="Markdown",
                 disable_notification=False,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning(f"Помилка надсилання системного попередження {chat_id}: {exc}")

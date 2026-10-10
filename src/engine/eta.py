@@ -1,8 +1,7 @@
 """Розрахунок гібридного ETA та визначення рівнів небезпеки."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Tuple
+from datetime import datetime, timedelta
 
 from src.engine.models import AlertLevel
 from src.learning.calibration import physics_interval
@@ -14,7 +13,7 @@ def calculate_eta(
     ref: ReferenceData,
     post_time_utc: datetime,
     current_time_utc: datetime,
-) -> Tuple[float, float, datetime, datetime, str]:
+) -> tuple[float, float, datetime, datetime, str]:
     """Обчислює мінімальний і максимальний час підльоту (у хвилинах) та часове вікно.
 
     Повертає:
@@ -44,8 +43,8 @@ def calculate_eta(
     # Формат: "22:50–22:58 (за 25–33 хв)"
     start_str = window_start.strftime("%H:%M")
     end_str = window_end.strftime("%H:%M")
-    min_int = int(round(rem_min))
-    max_int = int(round(rem_max))
+    min_int = round(rem_min)
+    max_int = round(rem_max)
 
     if max_int <= 2:
         window_str = f"{start_str}–{end_str} (менше 2 хв / над містом зараз)"

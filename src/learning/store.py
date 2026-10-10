@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 OUTCOME_REACHED = "reached_if"           # долетіла до ІФ (є час прибуття)
@@ -62,14 +62,14 @@ CREATE TABLE IF NOT EXISTS alias_candidates (
 def to_utc_iso(dt: datetime) -> str:
     if dt.tzinfo is None:
         raise ValueError("Час має бути з часовою зоною (UTC)")
-    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+    return dt.astimezone(UTC).replace(microsecond=0).isoformat()
 
 
 def parse_utc(value: str) -> datetime:
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
         raise ValueError(f"Час без часової зони: {value}")
-    return dt.astimezone(timezone.utc)
+    return dt.astimezone(UTC)
 
 
 @dataclass(frozen=True)
@@ -164,7 +164,7 @@ class LearningStore:
                 (
                     outcome,
                     to_utc_iso(arrived_at) if arrived_at else None,
-                    to_utc_iso(datetime.now(timezone.utc)),
+                    to_utc_iso(datetime.now(UTC)),
                     notes,
                     target_id,
                 ),
@@ -238,7 +238,7 @@ class LearningStore:
             )
 
     def purge_posts(self, older_than_days: int, now: datetime | None = None) -> int:
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         cutoff = to_utc_iso(now - timedelta(days=older_than_days))
         with self.conn:
             return self.conn.execute("DELETE FROM posts WHERE posted_at_utc < ?", (cutoff,)).rowcount

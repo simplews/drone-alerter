@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     telethon_api_id: int = 0
     telethon_api_hash: str = ""
