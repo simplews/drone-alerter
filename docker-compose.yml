@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: if-drone-alert
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TELETHON_API_ID=${TELETHON_API_ID}
+      - TELETHON_API_HASH=${TELETHON_API_HASH}
+      - TELETHON_STRING_SESSION=${TELETHON_STRING_SESSION}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=sqlite:///data/app.db
+    volumes:
+      - ./data:/app/data
