@@ -18,14 +18,29 @@ async def main():
     print("Генератор StringSession для Telethon (Drone Alert IF)")
     print("=" * 60)
 
-    api_id = os.environ.get("TELETHON_API_ID")
-    if not api_id:
-        api_id = input("Введіть ваш Telegram API ID (з my.telegram.org): ").strip()
-    api_id = int(api_id)
+    api_id_val = os.environ.get("TELETHON_API_ID")
+    while not api_id_val:
+        raw = input("Введіть ваш Telegram API ID (лише цифри з my.telegram.org): ").strip()
+        if ":" in raw:
+            print(
+                "\n⚠️ Увага: ви ввели токен бота (з @BotFather).\n"
+                "Токен бота зберігається у змінній TELEGRAM_BOT_TOKEN у .env.\n"
+                "А для підключення до каналів (Telethon) потрібен числовий API ID з https://my.telegram.org\n"
+            )
+            continue
+        try:
+            api_id_val = int(raw)
+        except ValueError:
+            print("❌ API ID має бути цілим числом (наприклад: 12345678). Спробуйте ще раз.\n")
+
+    api_id = int(api_id_val)
 
     api_hash = os.environ.get("TELETHON_API_HASH")
-    if not api_hash:
-        api_hash = input("Введіть ваш Telegram API HASH: ").strip()
+    while not api_hash:
+        api_hash = input("Введіть ваш Telegram API HASH (32-значний рядок з my.telegram.org): ").strip()
+        if not api_hash:
+            print("❌ API HASH не може бути порожнім.")
+
 
     print("\nПідключення до Telegram... Буде надіслано код підтвердження.")
     async with TelegramClient(StringSession(), api_id, api_hash) as client:
