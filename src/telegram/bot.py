@@ -71,12 +71,26 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None) -> Di
             "у режимі **«Не турбувати» (Focus / DND)**.\n\n"
             "Команди:\n"
             "/status — поточний стан і активні цілі\n"
+            "/test — надіслати тестове сповіщення для перевірки звуку/DND\n"
             "/stop — зупинити сповіщення та повністю видалити мій акаунт"
         )
         await message.answer(text, parse_mode="Markdown")
 
+    @dp.message(Command("test"))
+    async def cmd_test(message: Message):
+        test_alert = (
+            "🧪 **ТЕСТОВЕ СПОВІЩЕННЯ СИСТЕМИ (Перевірка звуку)**\n\n"
+            "🔴 **[Рівень 2] [2х] Ціль наближається (Товсте)**\n"
+            "⏱ **Орієнтовний час підльоту:** 8–17 хв\n"
+            "📍 **Напрямок:** Товсте → Городенка → Тлумач → Івано-Франківськ\n\n"
+            "🔔 Це сповіщення надіслано з увімкненим звуком (не silent). "
+            "Перевірте, чи спрацював сигнал на вашому телефоні у поточному режимі (DND/Focus)."
+        )
+        await message.answer(test_alert, parse_mode="Markdown")
+
     @dp.message(Command("status"))
     async def cmd_status(message: Message):
+
         active = tracker.get_active_targets() if tracker else []
         if not active:
             msg = "🟢 **Активних реактивних цілей на коридорі не зафіксовано.**"
