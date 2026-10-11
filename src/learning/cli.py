@@ -164,6 +164,28 @@ def cmd_purge(args, repo, store):
     print(f"Видалено постів: {store.purge_posts(args.days)}")
 
 
+def cmd_show(args, repo, store):
+    ver = args.version or repo.active_version()
+    if not ver:
+        sys.exit("Немає доступних версій довідника")
+    ref = repo.load(ver)
+    status_label = "(активна)" if ver == repo.active_version() else f"({ref.status})"
+    print(f"\n=== Довідник точок коридору та ETA v{ver} {status_label} ===")
+    print(f"Швидкість БпЛА: {ref.speed_kmh[0]:.0f}–{ref.speed_kmh[1]:.0f} км/год | Лаг постів: {ref.post_lag_min[0]:.0f}–{ref.post_lag_min[1]:.0f} хв\n")
+    print("-" * 90)
+    print(f"{'Пункт коридору':<22} | {'Рівень':<8} | {'ETA (хв)':<12} | {'Метод':<22} | {'Випадків':<9} | {'P(ІФ)':<6}")
+    print("-" * 90)
+    sorted_points = sorted(ref.points.values(), key=lambda p: (p.level, -(p.eta_min or 0)))
+    for p in sorted_points:
+        name = p.names[0].capitalize() if p.names else p.id
+        eta_str = f"{p.eta_min:.0f}–{p.eta_max:.0f}" if p.eta_min is not None and p.eta_max is not None else "—"
+        p_if_str = f"{p.base_rate:.1%}" if p.base_rate is not None else "—"
+        lvl_marker = "⚪️ Рівень 1" if p.level == 1 else "🔴 Рівень 2" if p.level == 2 else "🟠 Рівень 3"
+        print(f"{name:<22} | {lvl_marker:<8} | {eta_str:<12} | {p.eta_method:<22} | {p.n_obs:<9} | {p_if_str:<6}")
+    print("-" * 90 + "\n")
+
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="learning", description="Навчання довідників")
     p.add_argument("--ref-dir", default=DEFAULT_REF_DIR)
@@ -205,7 +227,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_set_distance)
     s = sub.add_parser("purge-posts"); s.add_argument("--days", type=int, default=14)
     s.set_defaults(func=cmd_purge)
+    s = sub.add_parser("show", help="Вивести таблицю точок коридору та ETA")
+    s.add_argument("version", type=int, nargs="?", help="Номер версії довідника (за замовчуванням активна)")
+    s.set_defaults(func=cmd_show)
     return p
+
 
 
 def main(argv: list[str] | None = None) -> None:
