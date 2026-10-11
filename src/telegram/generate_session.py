@@ -42,16 +42,34 @@ async def main():
             print("❌ API HASH не може бути порожнім.")
 
 
-    print("\nПідключення до Telegram... Буде надіслано код підтвердження.")
-    async with TelegramClient(StringSession(), api_id, api_hash) as client:
-        session_str = client.session.save()
-        print("\n" + "=" * 60)
-        print("АВТОРИЗАЦІЯ УСПІШНА! Ось ваш рядок сесії:")
-        print("=" * 60)
-        print(session_str)
-        print("=" * 60)
-        print("Скопіюйте цей рядок та збережіть у файлі .env:")
-        print(f"TELETHON_STRING_SESSION={session_str}\n")
+    client = TelegramClient(StringSession(), api_id, api_hash)
+    await client.connect()
+
+    print("\nУвага: для читання публічних каналів потрібен обліковий запис КОРИСТУВАЧА (не бота).")
+    phone = input("Введіть ваш номер телефону Telegram (наприклад, +380971234567): ").strip()
+
+    await client.start(phone=lambda: phone)
+
+    me = await client.get_me()
+    if me and getattr(me, "bot", False):
+        print("\n❌ ПОМИЛКА: Сесія створена як БОТ, а не як користувач!")
+        print("Telegram забороняє ботам читати публічні канали та їхню історію.")
+        print("Будь ласка, введіть саме номер телефону звичайного акаунта.")
+        await client.disconnect()
+        return
+
+    session_str = client.session.save()
+    await client.disconnect()
+
+    user_title = f"{me.first_name} (@{me.username})" if me else "Користувач"
+    print("\n" + "=" * 60)
+    print(f"АВТОРИЗАЦІЯ УСПІШНА ({user_title})! Ось ваш рядок сесії:")
+    print("=" * 60)
+    print(session_str)
+    print("=" * 60)
+    print("Скопіюйте цей рядок та збережіть у файлі .env:")
+    print(f"TELETHON_STRING_SESSION={session_str}\n")
+
 
 
 if __name__ == "__main__":
