@@ -67,9 +67,22 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
                 index[norm] = pid
                 log.append(f"Назва «{norm}» -> {pid}")
 
-    # 2. Швидкість.
+    # 2. Відстані та швидкість реактивних БпЛА.
+    from .reference import seed_from_dictionary
+    seed_points = seed_from_dictionary().points
+    for pid, point in cand.points.items():
+        if point.distance_km is None and pid in seed_points:
+            point.distance_km = seed_points[pid].distance_km
+
+    cand.post_lag_min = [0.5, 1.5]
     speed = fit_speed(observations, cand.points, cfg)
-    if speed and speed != cand.speed_kmh:
+    if speed:
+        # обмежуємо швидкість діапазоном реактивних БпЛА Shahed-238
+        speed = [max(380.0, speed[0]), min(500.0, speed[1])]
+    else:
+        speed = [400.0, 480.0]
+
+    if speed != cand.speed_kmh:
         log.append(f"Швидкість {cand.speed_kmh} -> {speed} км/год")
         cand.speed_kmh = speed
 
@@ -78,6 +91,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
     for obs in observations:
         durations[obs.point_id].append(obs.minutes_to_arrival)
     for pid, point in cand.points.items():
+
         result = calibrate_point(point, durations.get(pid, []), cand.speed_kmh, cand.post_lag_min, cfg)
         if result is None:
             continue

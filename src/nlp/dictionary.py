@@ -18,21 +18,23 @@ CORRIDOR_POINTS = [
 ]
 
 ETA_TABLE = {
-    # id: (min_minutes, max_minutes)
-    "pishchanka": (35, 48),
-    "vendychany": (29, 41),
-    "nova_ushytsia": (25, 33),
-    "stara_ushytsia": (23, 36),
-    "dunaivtsi": (20, 33),
-    "kamianets_podilskyi": (17, 29),
-    "skala_podilska": (13, 23),
-    "borshchiv": (12, 21),
-    "tovste": (8, 17),
-    "chernelytsia": (5, 13),
-    "tlumach": (4, 8),
+    # id: (min_minutes, max_minutes) — розраховано для v=400–480 км/год
+    "pishchanka": (32, 40),
+    "vendychany": (27, 34),
+    "nova_ushytsia": (23, 30),
+    "stara_ushytsia": (21, 27),
+    "dunaivtsi": (19, 25),
+    "tomashpil": (35, 43),
+    "kamianets_podilskyi": (16, 22),
+    "skala_podilska": (12, 17),
+    "borshchiv": (11, 16),
+    "tovste": (8, 13),
+    "chernelytsia": (5, 9),
+    "tlumach": (3, 6),
     "tysmenytsia": (0, 3),
-    "khryplyn": (0, 2)
+    "khryplyn": (0, 2),
 }
+
 
 TARGET_KEYWORDS = [
     "реактивна герань", "реактивні герані",

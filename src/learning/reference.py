@@ -55,10 +55,11 @@ class ReferenceData:
     created_at: str = ""
     status: str = STATUS_PENDING
     points: dict[str, PointRef] = field(default_factory=dict)
-    speed_kmh: list[float] = field(default_factory=lambda: [340.0, 450.0])
+    speed_kmh: list[float] = field(default_factory=lambda: [400.0, 480.0])
     # Шум часу публікації (хв). Враховує запізнення і першої згадки, і
     # повідомлення про прибуття.
-    post_lag_min: list[float] = field(default_factory=lambda: [1.0, 3.0])
+    post_lag_min: list[float] = field(default_factory=lambda: [0.5, 1.5])
+
     target_keywords: list[str] = field(default_factory=list)
     cancel_keywords: list[str] = field(default_factory=list)
     stopwords: list[str] = field(default_factory=lambda: list(DEFAULT_STOPWORDS))
@@ -198,9 +199,24 @@ def seed_from_dictionary() -> ReferenceData:
     """Перша версія з src/nlp/dictionary.py (дані з PRD)."""
     from src.nlp import dictionary as d
 
-    # Відстані взято лише з PRD (Нова Ушиця ~190 км, Чернелиця ~54 км).
-    # Решту треба внести вручну командою `set-distance` після звірки з картою.
-    known_distances = {"nova_ushytsia": 190.0, "chernelytsia": 54.0}
+    # Реальні відстані польоту до Івано-Франківська вздовж коридору
+    known_distances = {
+        "khryplyn": 7.0,
+        "tysmenytsia": 12.0,
+        "tlumach": 25.0,
+        "chernelytsia": 54.0,
+        "tovste": 75.0,
+        "borshchiv": 95.0,
+        "skala_podilska": 110.0,
+        "kamianets_podilskyi": 135.0,
+        "dunaivtsi": 160.0,
+        "stara_ushytsia": 165.0,
+        "nova_ushytsia": 190.0,
+        "vendychany": 225.0,
+        "tomashpil": 250.0,
+        "pishchanka": 265.0,
+    }
+
 
     points: dict[str, PointRef] = {}
     for item in d.CORRIDOR_POINTS:

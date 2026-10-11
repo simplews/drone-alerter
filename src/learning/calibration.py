@@ -27,12 +27,12 @@ from .store import (
 
 @dataclass
 class CalibrationConfig:
-    min_obs_empirical: int = 8
-    q_lo: float = 0.10
-    q_hi: float = 0.90
-    margin_min: float = 2.0
-    max_narrowing_per_update_min: float = 3.0
-    min_speed_obs: int = 6
+    min_obs_empirical: int = 6
+    q_lo: float = 0.15
+    q_hi: float = 0.85
+    margin_min: float = 1.0
+    max_narrowing_per_update_min: float = 6.0
+    min_speed_obs: int = 4
     # Beta(a, b) апріорі для P(ІФ | пункт). (1, 1) — рівномірний.
     base_rate_prior: tuple[float, float] = (1.0, 1.0)
 
@@ -91,13 +91,19 @@ def calibrate_point(point: PointRef, durations: list[float], speed_kmh: list[flo
     elif n < cfg.min_obs_empirical:
         lo = min(durations) - cfg.margin_min
         hi = max(durations) + cfg.margin_min
-        merged = _union((lo, hi), _union(prev, physics))
+        merged = _union((lo, hi), physics) if physics else _union((lo, hi), prev)
         lo, hi = merged
+        if physics:
+            hi = min(hi, physics[1] + 1.5)
+            lo = max(lo, max(0.0, physics[0] - 1.0))
         method = "minmax+margin+prior" if (prev or physics) else "minmax+margin"
     else:
         lo = quantile(durations, cfg.q_lo) - cfg.margin_min
         hi = quantile(durations, cfg.q_hi) + cfg.margin_min
         method = "empirical_q"
+        if physics:
+            hi = min(hi, physics[1] + 1.5)
+            lo = max(lo, max(0.0, physics[0] - 1.0))
         if prev is not None:
             step = cfg.max_narrowing_per_update_min
             if lo > prev[0]:
@@ -108,6 +114,7 @@ def calibrate_point(point: PointRef, durations: list[float], speed_kmh: list[flo
     lo = max(0.0, float(math.floor(lo)))
     hi = float(math.ceil(hi))
     return lo, hi, method
+
 
 
 def base_rates(rows: list[OutcomeRow], cfg: CalibrationConfig) -> dict[str, tuple[float, int]]:

@@ -39,6 +39,9 @@ class TargetTracker:
         self._active_targets: dict[str, Target] = {}
         # Збережені попередні сповіщення для запобігання спаму: target_id -> last_level
         self._target_last_alerted_level: dict[str, AlertLevel] = {}
+        # Зафіксовані пункти, за якими вже виходило сповіщення: target_id -> set(point_ids)
+        self._target_alerted_points: dict[str, set[str]] = {}
+
 
     def get_active_targets(self) -> list[Target]:
         return [t for t in self._active_targets.values() if t.status == TargetStatus.ACTIVE]
@@ -98,7 +101,7 @@ class TargetTracker:
         alerts: list[AlertEvent] = []
 
         # 1. Запис у LearningStore для аналітики та перенавчання
-        if self._store and parsed.is_jet:
+        if self._store and (parsed.is_jet or parsed.points):
             self._store.add_post(
                 channel=post.channel,
                 message_id=post.message_id,
@@ -114,8 +117,8 @@ class TargetTracker:
             self._cleanup_expired(now)
             return alerts
 
-        # Якщо в пості немає згадок пунктів або це не реактивна ціль — завершуємо
-        if not parsed.is_jet or not parsed.points:
+        # Якщо в пості немає згадок пунктів — завершуємо
+        if not parsed.points:
             self._cleanup_expired(now)
             return alerts
 
@@ -191,15 +194,18 @@ class TargetTracker:
             else:
                 target.confidence = "low"
 
-            # 4. Формування сповіщення (Антиспам за правилом F8)
+            # 4. Формування сповіщення: перша ж поява в пункті одразу дає алерт
+            alerted_points = self._target_alerted_points.setdefault(target.id, set())
+            is_new_point_for_target = point_id not in alerted_points
+
             last_alerted = self._target_last_alerted_level.get(target.id)
             should_alert = False
             is_update = False
 
-            if is_new_target or last_alerted is None or self._level_rank(target.level) > self._level_rank(last_alerted):
+            if is_new_target or last_alerted is None or is_new_point_for_target or self._level_rank(target.level) > self._level_rank(last_alerted):
                 should_alert = True
+                alerted_points.add(point_id)
             elif last_alerted == target.level:
-                # Рівень той самий — не спамимо новим повідомленням, а оновлюємо наявне
                 is_update = True
 
             if should_alert or is_update:
@@ -207,6 +213,7 @@ class TargetTracker:
                 alerts.append(alert)
                 if should_alert:
                     self._target_last_alerted_level[target.id] = target.level
+
 
         self._cleanup_expired(now)
         return alerts
@@ -296,13 +303,18 @@ class TargetTracker:
         point_display = point.names[0].capitalize() if point.names else target.last_point_id
         count_prefix = f"[{target.target_count}х] " if target.target_count > 1 else ""
 
+        disclaimer = (
+            "\n\n⚠️ *Час підльоту є виключно довідковим розрахунком і може змінюватися "
+            "через маневри або зміну курсу. Не орієнтуйтеся на нього як на істину — переходьте в безпечні місця!*"
+        )
+
         if target.level == AlertLevel.LEVEL_1:
             title = f"🟡 {count_prefix}Ціль на коридорі ({point_display})"
             body = (
                 f"Ціль зафіксовано на підходах до коридору ({point_display}). "
                 f"Можливий рух у бік Франківщини.\n"
-                f"Розрахункове вікно біля міста: {window_str}.\n"
-                f"Слідкуйте за оновленнями."
+                f"Розрахункове вікно біля міста: {window_str}."
+                f"{disclaimer}"
             )
             is_silent = True
 
@@ -312,6 +324,7 @@ class TargetTracker:
                 f"Ціль прямує в бік Франківщини ({point_display})!\n"
                 f"Очікується біля міста: {window_str}.\n"
                 f"Підготуйтеся перейти в безпечне місце."
+                f"{disclaimer}"
             )
             is_silent = False
 
@@ -321,6 +334,7 @@ class TargetTracker:
                 f"Ціль підлітає до Івано-Франківська через {point_display}!\n"
                 f"Час до міста: {window_str}.\n"
                 f"Негайно перебувайте в укриттях!"
+                f"{disclaimer}"
             )
             is_silent = False
 
@@ -329,8 +343,10 @@ class TargetTracker:
             body = (
                 f"Ціль безпосередньо біля або над містом зараз ({point_display})!\n"
                 f"Негайно відійдіть від вікон та перебувайте в безпечних місцях!"
+                f"{disclaimer}"
             )
             is_silent = False
+
 
         return AlertEvent(
             target_id=target.id,

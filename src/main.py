@@ -86,6 +86,9 @@ class Application:
         alerts = self.tracker.process_message(post, parsed)
 
         for alert in alerts:
+            if alert.is_update:
+                logger.debug(f"ℹ️ [ПОВТОР/ОНОВЛЕННЯ] {alert.title} (дедупліковано в межах вікна)")
+                continue
             logger.info(f"🚨 [СПОЗВІЩЕННЯ] {alert.title} (рівень={alert.level.value}, silent={alert.is_silent})")
             if self.bot:
                 await broadcast_alert(self.bot, self.subscriber_repo, alert)

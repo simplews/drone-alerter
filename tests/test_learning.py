@@ -71,7 +71,7 @@ class RepositoryTests(unittest.TestCase):
     def test_seed_promote_rollback(self):
         v1 = self.repo.save_new(seed_from_dictionary())
         self.repo.promote(v1.version)
-        self.assertEqual(self.repo.active().points["borshchiv"].eta_min, 12.0)
+        self.assertEqual(self.repo.active().points["borshchiv"].eta_min, 11.0)
 
         cand = self.repo.active().clone_as_candidate()
         cand.points["borshchiv"].eta_min = 10.0
@@ -169,7 +169,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report.status, "pending")
         self.assertEqual(self.repo.active_version(), 1)  # без схвалення не активується
         new = self.repo.load(report.version)
-        self.assertEqual(new.points["borshchiv"].eta_max, 27)  # 25 + запас 2, розширено
+        self.assertEqual(new.points["borshchiv"].eta_max, 18.0)  # фізична межа відстані 95 км при 400 км/год
         self.assertTrue(any("borshchiv" in line for line in diff(self.repo.active(), new)))
 
     def test_second_retrain_without_new_data_is_skipped(self):
