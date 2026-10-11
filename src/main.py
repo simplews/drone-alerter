@@ -91,7 +91,14 @@ class Application:
             logger.warning("TELETHON_API_ID / HASH не задано. Читання каналів вимкнено.")
 
         # Реєстрація компонентів у FastAPI
-        set_app_state(self.tracker, self.ref_cache, self.listener, self.siren_service)
+        set_app_state(
+            tracker=self.tracker,
+            ref_cache=self.ref_cache,
+            listener=self.listener,
+            siren_service=self.siren_service,
+            bot=self.bot,
+            subscribers=self.subscriber_repo,
+        )
 
     async def on_telegram_post(self, post: RawPost) -> None:
         """Обробляє отриманий пост з каналу в реальному часі."""

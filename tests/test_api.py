@@ -42,6 +42,38 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
 
+    def test_test_alert_endpoint(self):
+        # 1. Without bot/subscribers configured
+        resp = self.client.post("/test-alert")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "error")
+
+        # 2. With mock subscribers and mock bot
+        from unittest.mock import AsyncMock, MagicMock
+
+        from src.telegram.bot import SubscriberRepository
+
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_subscribers = MagicMock(spec=SubscriberRepository)
+        mock_subscribers.count.return_value = 2
+        mock_subscribers.get_all.return_value = [111, 222]
+
+        set_app_state(
+            tracker=self.tracker,
+            ref_cache=self.cache,
+            bot=mock_bot,
+            subscribers=mock_subscribers,
+        )
+
+        resp = self.client.post("/test-alert?type=drone")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["alert_type"], "drone")
+        self.assertEqual(data["subscribers_notified"], 2)
+        self.assertEqual(mock_bot.send_message.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
