@@ -194,7 +194,7 @@ def main():
 
         for alert in alerts:
             lvl_marker = "🔴" if alert.level == AlertLevel.LEVEL_2 else "🟠" if alert.level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B) else "⚪️"
-            print(f"  {lvl_marker} [{alert.level.value}] {alert.title} | ETA: {alert.eta_window_text or 'н/д'}")
+            print(f"  {lvl_marker} [{alert.level.value}] {alert.title} | ETA: {alert.eta_window_str or 'н/д'}")
 
         if args.evaluate:
             # Створюємо один узагальнений епізод симуляції

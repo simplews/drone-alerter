@@ -1,0 +1,468 @@
+{
+  "version": 3,
+  "parent_version": 1,
+  "created_at": "2026-10-11T18:27:31+00:00",
+  "status": "pending",
+  "points": {
+    "pishchanka": {
+      "id": "pishchanka",
+      "names": [
+        "піщанка",
+        "піщанку",
+        "піщанці"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 32.0,
+      "eta_max": 49.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 6,
+      "base_rate": 0.917,
+      "n_outcomes": 10
+    },
+    "vendychany": {
+      "id": "vendychany",
+      "names": [
+        "вендичани",
+        "вендичанах",
+        "вендичан"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 28.0,
+      "eta_max": 41.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 6,
+      "base_rate": 0.722,
+      "n_outcomes": 16
+    },
+    "nova_ushytsia": {
+      "id": "nova_ushytsia",
+      "names": [
+        "нова ушиця",
+        "нову ушицю",
+        "новій ушиці",
+        "н. ушиця",
+        "н.ушиця",
+        "ушиця",
+        "ушицю"
+      ],
+      "level": 1,
+      "distance_km": 190.0,
+      "eta_min": 25.0,
+      "eta_max": 35.0,
+      "eta_method": "empirical_q",
+      "n_obs": 12,
+      "base_rate": 0.929,
+      "n_outcomes": 12
+    },
+    "stara_ushytsia": {
+      "id": "stara_ushytsia",
+      "names": [
+        "стара ушиця",
+        "стару ушицю",
+        "старій ушиці"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 20.0,
+      "eta_max": 36.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 2,
+      "base_rate": 0.875,
+      "n_outcomes": 6
+    },
+    "dunaivtsi": {
+      "id": "dunaivtsi",
+      "names": [
+        "дунаївці",
+        "дунаївцях",
+        "дунаївців"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 19.0,
+      "eta_max": 33.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 4,
+      "base_rate": 0.875,
+      "n_outcomes": 6
+    },
+    "tomashpil": {
+      "id": "tomashpil",
+      "names": [
+        "томашпіль",
+        "томашполі",
+        "томашполя"
+      ],
+      "level": 1,
+      "distance_km": null,
+      "eta_min": 39.0,
+      "eta_max": 44.0,
+      "eta_method": "minmax+margin",
+      "n_obs": 2,
+      "base_rate": 0.375,
+      "n_outcomes": 6
+    },
+    "kamianets_podilskyi": {
+      "id": "kamianets_podilskyi",
+      "names": [
+        "камʼянець-подільський",
+        "кам'янець-подільський",
+        "камянець",
+        "камʼянець",
+        "кам'янці",
+        "камʼянці",
+        "камʼянця",
+        "кам'янця"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 17.0,
+      "eta_max": 33.0,
+      "eta_method": "empirical_q",
+      "n_obs": 10,
+      "base_rate": 0.938,
+      "n_outcomes": 14
+    },
+    "skala_podilska": {
+      "id": "skala_podilska",
+      "names": [
+        "скала-подільська",
+        "скалу-подільську",
+        "скалі-подільській",
+        "скала"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 10.0,
+      "eta_max": 23.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 4,
+      "base_rate": 0.833,
+      "n_outcomes": 4
+    },
+    "tovste": {
+      "id": "tovste",
+      "names": [
+        "товсте",
+        "товстому",
+        "товстого"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 8.0,
+      "eta_max": 17.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 2,
+      "base_rate": 0.875,
+      "n_outcomes": 6
+    },
+    "borshchiv": {
+      "id": "borshchiv",
+      "names": [
+        "борщів",
+        "борщеві",
+        "борщєві",
+        "борщова",
+        "борщева"
+      ],
+      "level": 2,
+      "distance_km": null,
+      "eta_min": 11.0,
+      "eta_max": 23.0,
+      "eta_method": "empirical_q",
+      "n_obs": 12,
+      "base_rate": 0.938,
+      "n_outcomes": 14
+    },
+    "chernelytsia": {
+      "id": "chernelytsia",
+      "names": [
+        "чернелиця",
+        "чернелицю",
+        "чернелиці",
+        "чернелицею"
+      ],
+      "level": 3,
+      "distance_km": 54.0,
+      "eta_min": 5.0,
+      "eta_max": 13.0,
+      "eta_method": "seed",
+      "n_obs": 0,
+      "base_rate": 0.75,
+      "n_outcomes": 2
+    },
+    "tlumach": {
+      "id": "tlumach",
+      "names": [
+        "тлумач",
+        "тлумачі",
+        "тлумачем",
+        "тлумачу",
+        "тлумача"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 1.0,
+      "eta_max": 10.0,
+      "eta_method": "empirical_q",
+      "n_obs": 8,
+      "base_rate": 0.9,
+      "n_outcomes": 8
+    },
+    "tysmenytsia": {
+      "id": "tysmenytsia",
+      "names": [
+        "тисмениця",
+        "тисменицю",
+        "тисмениці"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 0.0,
+      "eta_max": 6.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 2,
+      "base_rate": 0.875,
+      "n_outcomes": 6
+    },
+    "khryplyn": {
+      "id": "khryplyn",
+      "names": [
+        "хриплин",
+        "хриплині",
+        "хриплину"
+      ],
+      "level": 3,
+      "distance_km": null,
+      "eta_min": 0.0,
+      "eta_max": 3.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 4,
+      "base_rate": 0.929,
+      "n_outcomes": 12
+    }
+  },
+  "speed_kmh": [
+    349,
+    422
+  ],
+  "post_lag_min": [
+    1.0,
+    3.0
+  ],
+  "target_keywords": [
+    "реактивна герань",
+    "реактивні герані",
+    "реактивний шахед",
+    "реактивні шахеди",
+    "реактивний бпла",
+    "реактивні бпла",
+    "шахед-238",
+    "геран-3",
+    "реактив",
+    "джет"
+  ],
+  "cancel_keywords": [
+    "вибух",
+    "збит",
+    "локаційно втрачен",
+    "дорозвідка",
+    "відбій",
+    "на рівне",
+    "на рівненщину",
+    "на волинь",
+    "на житомир",
+    "на житомирщину",
+    "відбій на заході"
+  ],
+  "stopwords": [
+    "україна",
+    "увага",
+    "оновлення",
+    "upd",
+    "захід",
+    "схід",
+    "північ",
+    "південь",
+    "повітряні",
+    "сили",
+    "реактивна",
+    "реактивний",
+    "реактивні",
+    "герань",
+    "шахед",
+    "бпла",
+    "іф",
+    "франківськ",
+    "івано-франківськ",
+    "тернопіль",
+    "хмельницький",
+    "волинь",
+    "буковина",
+    "поділля"
+  ],
+  "changelog": [
+    "Швидкість [340.0, 450.0] -> [349, 422] км/год",
+    "ETA pishchanka: 35.0–48.0 -> 32–49 хв (minmax+margin+prior)",
+    "ETA vendychany: 29.0–41.0 -> 28–41 хв (minmax+margin+prior)",
+    "ETA nova_ushytsia: 25.0–33.0 -> 25–35 хв (empirical_q)",
+    "ETA stara_ushytsia: 23.0–36.0 -> 20–36 хв (minmax+margin+prior)",
+    "ETA dunaivtsi: 20.0–33.0 -> 19–33 хв (minmax+margin+prior)",
+    "ETA tomashpil: None–None -> 39–44 хв (minmax+margin)",
+    "ETA kamianets_podilskyi: 17.0–29.0 -> 17–33 хв (empirical_q)",
+    "ETA skala_podilska: 13.0–23.0 -> 10–23 хв (minmax+margin+prior)",
+    "ETA borshchiv: 12.0–21.0 -> 11–23 хв (empirical_q)",
+    "ETA tlumach: 4.0–8.0 -> 1–10 хв (empirical_q)",
+    "ETA tysmenytsia: 0.0–3.0 -> 0–6 хв (minmax+margin+prior)",
+    "ETA khryplyn: 0.0–2.0 -> 0–3 хв (minmax+margin+prior)",
+    "P(ІФ | kamianets_podilskyi): None -> 0.938 (n=14)",
+    "P(ІФ | pishchanka): None -> 0.917 (n=10)",
+    "P(ІФ | khryplyn): None -> 0.929 (n=12)",
+    "P(ІФ | nova_ushytsia): None -> 0.929 (n=12)",
+    "P(ІФ | skala_podilska): None -> 0.833 (n=4)",
+    "P(ІФ | tlumach): None -> 0.9 (n=8)",
+    "P(ІФ | tysmenytsia): None -> 0.875 (n=6)",
+    "P(ІФ | tomashpil): None -> 0.375 (n=6)",
+    "P(ІФ | vendychany): None -> 0.722 (n=16)",
+    "P(ІФ | borshchiv): None -> 0.938 (n=14)",
+    "P(ІФ | tovste): None -> 0.875 (n=6)",
+    "P(ІФ | stara_ushytsia): None -> 0.875 (n=6)",
+    "P(ІФ | dunaivtsi): None -> 0.875 (n=6)",
+    "P(ІФ | chernelytsia): None -> 0.75 (n=2)"
+  ],
+  "metrics": {
+    "n_labeled_targets": 62,
+    "n_arrival_obs": 74,
+    "fit_on_all": {
+      "n": 74,
+      "coverage": 1.0,
+      "mean_width_min": 11.7,
+      "per_point": {
+        "kamianets_podilskyi": {
+          "hits": 10,
+          "n": 10
+        },
+        "pishchanka": {
+          "hits": 6,
+          "n": 6
+        },
+        "nova_ushytsia": {
+          "hits": 12,
+          "n": 12
+        },
+        "skala_podilska": {
+          "hits": 4,
+          "n": 4
+        },
+        "tlumach": {
+          "hits": 8,
+          "n": 8
+        },
+        "tomashpil": {
+          "hits": 2,
+          "n": 2
+        },
+        "vendychany": {
+          "hits": 6,
+          "n": 6
+        },
+        "borshchiv": {
+          "hits": 12,
+          "n": 12
+        },
+        "tovste": {
+          "hits": 2,
+          "n": 2
+        },
+        "tysmenytsia": {
+          "hits": 2,
+          "n": 2
+        },
+        "khryplyn": {
+          "hits": 4,
+          "n": 4
+        },
+        "stara_ushytsia": {
+          "hits": 2,
+          "n": 2
+        },
+        "dunaivtsi": {
+          "hits": 4,
+          "n": 4
+        }
+      }
+    },
+    "holdout": {
+      "targets": 11,
+      "active": {
+        "n": 21,
+        "coverage": 0.905,
+        "mean_width_min": 9.0,
+        "per_point": {
+          "khryplyn": {
+            "hits": 1,
+            "n": 1
+          },
+          "nova_ushytsia": {
+            "hits": 6,
+            "n": 6
+          },
+          "borshchiv": {
+            "hits": 6,
+            "n": 6
+          },
+          "dunaivtsi": {
+            "hits": 4,
+            "n": 4
+          },
+          "tlumach": {
+            "hits": 0,
+            "n": 2
+          },
+          "pishchanka": {
+            "hits": 2,
+            "n": 2
+          }
+        }
+      },
+      "candidate": {
+        "n": 21,
+        "coverage": 1.0,
+        "mean_width_min": 11.0,
+        "per_point": {
+          "khryplyn": {
+            "hits": 1,
+            "n": 1
+          },
+          "nova_ushytsia": {
+            "hits": 6,
+            "n": 6
+          },
+          "borshchiv": {
+            "hits": 6,
+            "n": 6
+          },
+          "dunaivtsi": {
+            "hits": 4,
+            "n": 4
+          },
+          "tlumach": {
+            "hits": 2,
+            "n": 2
+          },
+          "pishchanka": {
+            "hits": 2,
+            "n": 2
+          }
+        }
+      }
+    },
+    "gates": {
+      "enough_holdout": true,
+      "coverage_not_worse": true,
+      "width_ok": true
+    }
+  }
+}

@@ -38,6 +38,9 @@ env/
 *.db
 sessions/
 *.session
+data/attacks_*.json
+data/historical_*.json
+
 
 # macOS
 .DS_Store
