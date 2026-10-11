@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8080
 
+    siren_enabled: bool = True
+    siren_region: str = "Івано-Франківська область"
+    siren_poll_interval_seconds: float = 12.0
+    siren_sources: list[str] = [
+        "https://ubilling.net.ua/aerialalerts/",
+        "https://ubilling.net.ua/aerialalerts/?source=jaam",
+        "https://ubilling.net.ua/aerialalerts/?source=skog",
+        "https://ubilling.net.ua/aerialalerts/?source=klimenko",
+        "http://ubilling.net.ua/aerialalerts/",
+    ]
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

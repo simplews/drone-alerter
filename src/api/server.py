@@ -12,14 +12,16 @@ app = FastAPI(title="IF Drone Alert API", version="1.1.0")
 _tracker = None
 _ref_cache = None
 _listener = None
+_siren = None
 _start_time = datetime.now(UTC)
 
 
-def set_app_state(tracker=None, ref_cache=None, listener=None):
-    global _tracker, _ref_cache, _listener
+def set_app_state(tracker=None, ref_cache=None, listener=None, siren_service=None):
+    global _tracker, _ref_cache, _listener, _siren
     _tracker = tracker
     _ref_cache = ref_cache
     _listener = listener
+    _siren = siren_service
 
 
 @app.get("/health")
@@ -30,12 +32,17 @@ def healthcheck() -> dict[str, Any]:
     ref_version = _ref_cache.get().version if _ref_cache else 0
     is_connected = _listener.is_connected() if _listener else False
 
+    siren_state = _siren.get_current_state() if _siren else None
+
     return {
         "status": "ok",
         "uptime_seconds": int(uptime_seconds),
         "active_targets_count": active_targets_count,
         "reference_version": ref_version,
         "telegram_listener_connected": is_connected,
+        "siren_alert_active": siren_state.is_active if siren_state else False,
+        "siren_region": siren_state.region if siren_state else None,
+        "siren_source": siren_state.source_url if siren_state else None,
     }
 
 

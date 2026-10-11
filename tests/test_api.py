@@ -35,6 +35,7 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["reference_version"], 1)
         self.assertEqual(data["active_targets_count"], 0)
+        self.assertIn("siren_alert_active", data)
 
     def test_targets_endpoint_empty(self):
         resp = self.client.get("/targets")

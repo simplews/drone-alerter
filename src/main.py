@@ -20,9 +20,11 @@ from src.learning.reference import (
 )
 from src.learning.store import LearningStore
 from src.nlp.normalizer import MessageNormalizer
+from src.siren import AerialAlertService, SirenState
 from src.telegram.bot import (
     SubscriberRepository,
     broadcast_alert,
+    broadcast_siren_event,
     broadcast_system_warning,
     create_bot_dispatcher,
 )
@@ -54,12 +56,23 @@ class Application:
         self.normalizer = MessageNormalizer(self.ref_cache)
         self.tracker = TargetTracker(self.ref_cache, store=self.learning_store)
 
-        # 3. Адаптери Telegram
+        # 3. Сервіс офіційних повітряних тривог
+        self.siren_service: AerialAlertService | None = None
+        if settings.siren_enabled:
+            self.siren_service = AerialAlertService(
+                region=settings.siren_region,
+                sources=settings.siren_sources,
+                poll_interval_seconds=settings.siren_poll_interval_seconds,
+                on_alert_start=self.on_siren_start,
+                on_alert_end=self.on_siren_end,
+            )
+
+        # 4. Адаптери Telegram
         self.bot: Bot | None = None
         self.bot_dp = None
         if settings.telegram_bot_token:
             self.bot = Bot(token=settings.telegram_bot_token)
-            self.bot_dp = create_bot_dispatcher(self.subscriber_repo, self.tracker)
+            self.bot_dp = create_bot_dispatcher(self.subscriber_repo, self.tracker, self.siren_service)
         else:
             logger.warning("TELEGRAM_BOT_TOKEN не задано. Бот сповіщень вимкнено.")
 
@@ -78,7 +91,7 @@ class Application:
             logger.warning("TELETHON_API_ID / HASH не задано. Читання каналів вимкнено.")
 
         # Реєстрація компонентів у FastAPI
-        set_app_state(self.tracker, self.ref_cache, self.listener)
+        set_app_state(self.tracker, self.ref_cache, self.listener, self.siren_service)
 
     async def on_telegram_post(self, post: RawPost) -> None:
         """Обробляє отриманий пост з каналу в реальному часі."""
@@ -110,8 +123,29 @@ class Application:
             msg = "🟢 **З'єднання з моніторингом відновлено.** Система працює в штатному режимі."
             await broadcast_system_warning(self.bot, self.subscriber_repo, msg)
 
+    async def on_siren_start(self, state: SirenState) -> None:
+        logger.warning(f"🚨 [ПОВІТРЯНА ТРИВОГА] Оголошено тривогу: {state.region}")
+        if self.bot:
+            title = "🚨🔴 **ПОВІТРЯНА ТРИВОГА!**"
+            body = (
+                f"В **{state.region}** оголошено офіційну повітряну тривогу!\n\n"
+                f"Негайно прямуйте в укриття або перебувайте в безпечному місці!\n"
+                f"Слідкуйте за офіційними повідомленнями ОВА та Повітряних сил."
+            )
+            await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)
+
+    async def on_siren_end(self, state: SirenState) -> None:
+        logger.info(f"🟢 [ВІДБІЙ ТРИВОГИ] Відбій повітряної тривоги: {state.region}")
+        if self.bot:
+            title = "🟢 **ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
+            body = (
+                f"В **{state.region}** оголошено відбій повітряної тривоги.\n\n"
+                f"Загроза минула. Будьте уважні та бережіть себе!"
+            )
+            await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)
+
     async def run(self) -> None:
-        logger.info("Запуск сервісу попередження про реактивні БпЛА на Івано-Франківськ...")
+        logger.info("Запуск сервісу попередження про реактивні БпЛА та повітряні тривоги...")
 
         tasks = []
 
@@ -124,6 +158,10 @@ class Application:
         )
         server = uvicorn.Server(config)
         tasks.append(asyncio.create_task(server.serve()))
+
+        # Фоновий запуск монітора повітряних тривог
+        if self.siren_service:
+            tasks.append(asyncio.create_task(self.siren_service.start()))
 
         # Фоновий запуск слухача Telethon
         if self.listener:
@@ -138,6 +176,8 @@ class Application:
 
         # Зупинка компонентів (Graceful Shutdown)
         logger.info("Виконується зупинка сервісу...")
+        if self.siren_service:
+            await self.siren_service.stop()
         if self.listener:
             await self.listener.stop()
         if self.bot:
