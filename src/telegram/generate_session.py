@@ -1,22 +1,26 @@
 """Скрипт для одноразової генерації StringSession для Telethon.
 
+Підтримує авторизацію через QR-код (без SMS та очікування кодів)
+або за номером телефону.
+
 Запуск:
     python -m src.telegram.generate_session
-
-Після проходження авторизації скрипт виведе рядок сесії, який необхідно
-вставити у змінну TELETHON_STRING_SESSION у файлі .env (або в налаштуваннях хостингу).
 """
+from __future__ import annotations
+
 import asyncio
 import os
 
+import qrcode
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 
 async def main():
-    print("=" * 60)
-    print("Генератор StringSession для Telethon (Drone Alert IF)")
-    print("=" * 60)
+    print("=" * 65)
+    print("   ГЕНЕРАТОР STRINGSESSION ДЛЯ TELETHON (DRONE ALERT IF)")
+    print("=" * 65)
 
     api_id_val = os.environ.get("TELETHON_API_ID")
     while not api_id_val:
@@ -41,35 +45,60 @@ async def main():
         if not api_hash:
             print("❌ API HASH не може бути порожнім.")
 
-
     client = TelegramClient(StringSession(), api_id, api_hash)
     await client.connect()
 
-    print("\nУвага: для читання публічних каналів потрібен обліковий запис КОРИСТУВАЧА (не бота).")
-    phone = input("Введіть ваш номер телефону Telegram (наприклад, +380971234567): ").strip()
+    print("\nОберіть спосіб авторизації:")
+    print("  [1] Через QR-код (Рекомендовано — без SMS і кодів підтвердження)")
+    print("  [2] За номером телефону (+380...)")
+    choice = input("Ваш вибір [за замовчуванням 1]: ").strip() or "1"
 
-    await client.start(phone=lambda: phone)
+    if choice == "1":
+        print("\nГенерація QR-коду для входу...")
+        qr_login = await client.qr_login()
+
+        print("\n" + "=" * 65)
+        print("ВІДСКАНУЙТЕ ЦЕЙ QR-КОД У ДОДАТКУ TELEGRAM НА ТЕЛЕФОНІ:")
+        print("На телефоні: Налаштування -> Пристрої -> Підключити пристрій")
+        print("=" * 65 + "\n")
+
+        qr = qrcode.QRCode()
+        qr.add_data(qr_login.url)
+        qr.print_ascii(invert=True)
+
+        print("\nОчікування сканування QR-коду у додатку Telegram...")
+        try:
+            await qr_login.wait(timeout=180)
+        except TimeoutError:
+            print("❌ Час очікування вичерпано. Запустіть скрипт знову.")
+            await client.disconnect()
+            return
+        except SessionPasswordNeededError:
+            pwd = input("\nВведіть ваш пароль двоетапної перевірки (2FA Cloud Password): ").strip()
+            await client.sign_in(password=pwd)
+
+    else:
+        phone = input("\nВведіть ваш номер телефону Telegram (наприклад, +380971234567): ").strip()
+        await client.start(phone=lambda: phone)
 
     me = await client.get_me()
     if me and getattr(me, "bot", False):
         print("\n❌ ПОМИЛКА: Сесія створена як БОТ, а не як користувач!")
         print("Telegram забороняє ботам читати публічні канали та їхню історію.")
-        print("Будь ласка, введіть саме номер телефону звичайного акаунта.")
         await client.disconnect()
         return
 
     session_str = client.session.save()
     await client.disconnect()
 
-    user_title = f"{me.first_name} (@{me.username})" if me else "Користувач"
-    print("\n" + "=" * 60)
-    print(f"АВТОРИЗАЦІЯ УСПІШНА ({user_title})! Ось ваш рядок сесії:")
-    print("=" * 60)
+    user_title = f"{me.first_name} (@{me.username})" if me and me.username else (me.first_name if me else "Користувач")
+    print("\n" + "=" * 65)
+    print(f"✅ АВТОРИЗАЦІЯ УСПІШНА ({user_title})!")
+    print("=" * 65)
     print(session_str)
-    print("=" * 60)
+    print("=" * 65)
     print("Скопіюйте цей рядок та збережіть у файлі .env:")
     print(f"TELETHON_STRING_SESSION={session_str}\n")
-
 
 
 if __name__ == "__main__":
