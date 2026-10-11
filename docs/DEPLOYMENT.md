@@ -44,31 +44,46 @@ Oracle Cloud надає безкоштовно назавжди:
 
 ### Кроки налаштування на OCI VM (Ubuntu 22.04 / 24.04):
 
-1. **Встановлення Docker та Compose:**
+1. **Підключення до сервера через псевдонім:**
+   ```bash
+   ssh if-drone-alert
+   ```
+
+2. **Встановлення Docker та Compose на сервері:**
    ```bash
    sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
    sudo usermod -aG docker $USER
    newgrp docker
    ```
 
-2. **Клонування репозиторію:**
+3. **Відкриття порту 8080 у фаєрволі Ubuntu (iptables):**
    ```bash
-   git clone <URL_РЕПОЗИТОРІЮ> /opt/if-drone-alert
-   cd /opt/if-drone-alert
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8080 -j ACCEPT
+   sudo netfilter-persistent save 2>/dev/null || true
    ```
 
-3. **Створення `.env`:**
+4. **Копіювання проєкту з Mac на сервер (виконується на локальному комп'ютері):**
+   У новому терміналі на вашому Mac виконайте швидку синхронізацію:
    ```bash
+   rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.git' \
+     "$HOME/Local Sites/drone-alert/" if-drone-alert:~/if-drone-alert/
+   ```
+
+5. **Створення файлу `.env` на сервері:**
+   У сесії SSH (`ssh if-drone-alert`):
+   ```bash
+   cd ~/if-drone-alert
    cp .env.example .env
-   nano .env # вставте ваші ключі та StringSession
+   nano .env
    ```
+   Вставте збережені змінні (`TELETHON_API_ID`, `TELETHON_API_HASH`, `TELETHON_STRING_SESSION`, `TELEGRAM_BOT_TOKEN`).
 
-4. **Запуск через Docker Compose:**
+6. **Запуск через Docker Compose:**
    ```bash
    docker compose up -d
    ```
 
-5. **Перевірка логів та працездатності:**
+7. **Перевірка логів та працездатності:**
    ```bash
    docker compose logs -f
    curl http://localhost:8080/health
