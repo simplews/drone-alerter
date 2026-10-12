@@ -193,6 +193,61 @@ class TestTargetTracker(unittest.TestCase):
         self.assertIsNone(row["outcome"])
         store.close()
 
+    def test_multi_channel_lag_deduplication(self):
+        """Replicate the real attack episode:
+        - 20:19: kudy_letyt -> Nova Ushytsia
+        - 20:20: monitoring_zaxid -> Dunaivtsi
+        - 20:22: kpszsu -> Nova Ushytsia (lagged report from slower official channel)
+        - 20:24: kudy_letyt -> Dunaivtsi (repeat / update)
+        All 4 posts describe a SINGLE drone track. Only 2 alerts must be emitted (Nova Ushytsia, then Dunaivtsi).
+        """
+        t1 = datetime(2026, 10, 12, 17, 19, 3, tzinfo=UTC)
+        p1 = RawPost("kudy_letyt", 101, "Реактивна герань на Нову Ушицю", t1)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1)
+        self.assertEqual(len(alerts1), 1)
+        self.assertFalse(alerts1[0].is_update)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = datetime(2026, 10, 12, 17, 20, 16, tzinfo=UTC)
+        p2 = RawPost("monitoring_zaxid", 102, "Дунаївці - реактивний шахед курсом на Франківщину", t2)
+        alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
+        self.assertEqual(len(alerts2), 1)
+        self.assertFalse(alerts2[0].is_update)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "dunaivtsi")
+
+        # 3. Lagged post from kpszsu reporting Nova Ushytsia (upstream of Dunaivtsi)
+        t3 = datetime(2026, 10, 12, 17, 22, 34, tzinfo=UTC)
+        p3 = RawPost("kpszsu", 103, "БпЛА реактивного типу на Нову Ушицю курсом на захід", t3)
+        alerts3 = self.tracker.process_message(p3, self.normalizer.parse(p3), now=t3)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        # Target position must remain at dunaivtsi (closest to city)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "dunaivtsi")
+        # Alert must be flagged as update (not broadcast)
+        self.assertEqual(len(alerts3), 1)
+        self.assertTrue(alerts3[0].is_update)
+
+        # 4. Update from kudy_letyt reporting Dunaivtsi
+        t4 = datetime(2026, 10, 12, 17, 24, 8, tzinfo=UTC)
+        p4 = RawPost("kudy_letyt", 104, "Реактивний БпЛА курсом на Дунаївці", t4)
+        alerts4 = self.tracker.process_message(p4, self.normalizer.parse(p4), now=t4)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "dunaivtsi")
+        self.assertEqual(len(alerts4), 1)
+        self.assertTrue(alerts4[0].is_update)
+
+    def test_explicit_new_target_marker_creates_separate_target(self):
+        """When text explicitly says 'ще один', spawn a new target even for the same point."""
+        t1 = datetime(2026, 10, 12, 17, 19, 0, tzinfo=UTC)
+        p1 = RawPost("kudy_letyt", 201, "Реактивний БпЛА на Нову Ушицю", t1)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = t1 + timedelta(minutes=2)
+        p2 = RawPost("monitoring_zaxid", 202, "Ще один реактивний БпЛА на Нову Ушицю", t2)
+        self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

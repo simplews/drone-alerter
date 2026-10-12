@@ -25,6 +25,9 @@ _EXPLOSION_RE = re.compile(r"(?i)\b(вибух|вибухи|гучно|чутн�
 _LOST_RE = re.compile(r"(?i)\b(локаційно\s+втрачен[оа]|втрачено\s+з\s+радарів)\b")
 _DIVERTED_RE = re.compile(r"(?i)\b(на\s+рівне|на\s+рівненщину|на\s+волинь|на\s+житомир|на\s+житомирщину|на\s+північ|відвернув|відвернул[аои]|відвертає|змінил[аои]?\s+курс)\b")
 _CLEAR_RE = re.compile(r"(?i)\b(відбій|чисто|дорозвідка)\b")
+_ANOTHER_TARGET_RE = re.compile(
+    r"(?i)\b(ще\s+один|ще\s+одна|ще\s+1|ще\s+дв[іа]|інша\s+ціль|інший\s+шахед|інша\s+герань|нова\s+ціль|новий\s+шахед|другий\s+реактивн|друга\s+ціль)\b"
+)
 
 
 class MessageNormalizer:
@@ -132,12 +135,14 @@ class MessageNormalizer:
 
         # Bind the action to the first found point
         action_point = points_found[0] if points_found else None
+        is_new_target_marker = bool(_ANOTHER_TARGET_RE.search(norm_text))
 
         return ParsedMessage(
             is_jet=is_jet,
             points=points_found,
             count=count,
             explicit_count=explicit_count,
+            is_new_target_marker=is_new_target_marker,
             action=action,
             action_point_id=action_point,
             raw_text=text,
