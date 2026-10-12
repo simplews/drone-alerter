@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from src.engine.eta import calculate_eta, determine_level
@@ -16,9 +17,8 @@ from src.engine.models import (
     TargetStatus,
 )
 from src.learning.reference import ActiveReferenceCache, ReferenceData
-from src.learning.store import LearningStore
+from src.learning.store import OUTCOME_UNKNOWN, LearningStore
 from src.learning.text import normalize
-from src.profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +32,13 @@ class TargetTracker:
         store: LearningStore | None = None,
         dedup_window_minutes: float = 6.0,
         max_corridor_gap_minutes: float = 35.0,
+        is_siren_active_fn: Callable[[], bool] | None = None,
     ):
         self._ref_cache = ref_cache
         self._store = store
         self._dedup_window = timedelta(minutes=dedup_window_minutes)
         self._max_gap = timedelta(minutes=max_corridor_gap_minutes)
+        self._is_siren_active_fn = is_siren_active_fn or (lambda: False)
         self._active_targets: dict[str, Target] = {}
         # Saved earlier alerts that prevent spam: target_id -> last_level
         self._target_last_alerted_level: dict[str, AlertLevel] = {}
@@ -115,12 +117,12 @@ class TargetTracker:
         if parsed.action in (ActionType.DOWNED, ActionType.LOST, ActionType.DIVERTED):
             action_alerts = self._handle_action(post, parsed, now)
             alerts.extend(action_alerts)
-            self._cleanup_expired(now)
+            alerts.extend(self.check_timeouts(now))
             return alerts
 
         # If the post has no point mentions, stop here
         if not parsed.points:
-            self._cleanup_expired(now)
+            alerts.extend(self.check_timeouts(now))
             return alerts
 
         # 3. Process the points in the message
@@ -221,7 +223,7 @@ class TargetTracker:
 
 
 
-        self._cleanup_expired(now)
+        alerts.extend(self.check_timeouts(now))
         return alerts
 
     def _handle_action(
@@ -291,10 +293,16 @@ class TargetTracker:
 
         elif parsed.action == ActionType.DIVERTED:
             target.status = TargetStatus.DIVERTED
-            body = (
-                f"↗️ Ціль у районі {point_name} змінила курс і відвернула з коридору {get_profile().texts['divert_phrase']}. "
-                f"Слідкуйте за офіційними повідомленнями."
-            )
+            if self._is_siren_active_fn():
+                body = (
+                    f"↗️ Ціль у районі {point_name} змінила курс і прямує в іншому напрямку. "
+                    f"Залишайтеся в укриттях до оголошення відбою."
+                )
+            else:
+                body = (
+                    "↗️ Ціль змінила курс у напрямку іншої області. "
+                    "Слідкуйте за офіційними повідомленнями."
+                )
             alerts.append(AlertEvent(
                 target_id=target.id,
                 level=AlertLevel.INFO,
@@ -368,8 +376,54 @@ class TargetTracker:
         }
         return ranks.get(level, 0)
 
-    def _cleanup_expired(self, now: datetime) -> None:
-        """Mark as stale the targets that have no update for more than 45 minutes."""
+    def check_timeouts(self, now: datetime | None = None) -> list[AlertEvent]:
+        """Check for expired targets and transition them to lost or expired state."""
+        now = now or datetime.now(UTC)
+        alerts: list[AlertEvent] = []
+
         for target in list(self._active_targets.values()):
-            if target.status == TargetStatus.ACTIVE and (now - target.last_seen_utc) > timedelta(minutes=45):
+            if target.status != TargetStatus.ACTIVE:
+                continue
+
+            # Case 1: Level 1 target whose ETA window expired without reaching Level 2
+            if (
+                target.level == AlertLevel.LEVEL_1
+                and target.eta_window_end_utc
+                and now > target.eta_window_end_utc
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="ETA expired at Level 1 without reaching Level 2",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+
+                source_links: list[tuple[str, str]] = []
+                if target.message_ids:
+                    for ch, mid in target.message_ids[-2:]:
+                        source_links.append((ch, f"https://t.me/{ch}/{mid}"))
+
+                body = (
+                    "⚪️ Нових повідомлень про рух цілі немає. "
+                    "Можливо локаційно втрачена. "
+                    "Слідкуйте за подальшими повідомленнями."
+                )
+                alerts.append(AlertEvent(
+                    target_id=target.id,
+                    level=AlertLevel.INFO,
+                    title="Ціль локаційно втрачена",
+                    body=body,
+                    is_silent=True,
+                    source_links=source_links,
+                ))
+                continue
+
+            # Case 2: General cleanup for targets older than 45 minutes (e.g. Level 2, Level 3)
+            if (now - target.last_seen_utc) > timedelta(minutes=45):
                 target.status = TargetStatus.EXPIRED
+
+        return alerts

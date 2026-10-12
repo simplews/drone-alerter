@@ -28,6 +28,7 @@ class TargetStatus(str, Enum):
     PROBABLY_DOWNED = "probably_downed"
     DIVERTED = "diverted"
     EXPIRED = "expired"
+    LOST = "lost"
 
 
 @dataclass
