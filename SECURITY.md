@@ -2,20 +2,18 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+Only the latest commit on `main` is supported with security fixes.
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+**Do not open a public issue** for security problems — this system handles Telegram credentials and alert-subscriber data.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Report privately via GitHub's "Report a vulnerability" (Security → Advisories) on this repository, or by email to the maintainer listed on the GitHub profile.
+
+Please include a description, reproduction steps and impact. You can expect an acknowledgement within 7 days and a status update at least every 14 days until resolved.
+
+## Scope and handling of secrets
+
+- Never commit `.env`, Telegram sessions (`TELETHON_STRING_SESSION`), bot tokens or `*.db` files.
+- If you find a leaked secret in the repository or its history, report it privately; it will be revoked and rotated before any history cleanup.
+- Out of scope: the accuracy of ETA estimates. The system is advisory and does **not** replace official air-raid alerts.
