@@ -86,7 +86,7 @@ class MessageNormalizer:
             action = ActionType.LOST
         elif _EXPLOSION_RE.search(norm_text):
             action = ActionType.EXPLOSION
-        elif _DIVERTED_RE.search(norm_text):
+        elif _DIVERTED_RE.search(norm_text) or any(kw.lower() in norm_text for kw in ref.cancel_keywords if "на " in kw.lower() or "відверн" in kw.lower() or "курс" in kw.lower()):
             action = ActionType.DIVERTED
         elif _CLEAR_RE.search(norm_text):
             action = ActionType.CLEAR

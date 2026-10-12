@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from src.engine.models import AlertLevel, RawPost, TargetStatus
+from src.engine.models import ActionType, AlertLevel, RawPost, TargetStatus
 from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
@@ -168,7 +168,7 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(row["outcome"], OUTCOME_UNKNOWN)
         store.close()
 
-    def test_level_2_target_eta_timeout_not_marked_lost(self):
+    def test_level_2_target_eta_timeout_marked_lost(self):
         store = LearningStore(":memory:")
         tracker = TargetTracker(self.cache, store=store)
 
@@ -181,17 +181,36 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(target.level, AlertLevel.LEVEL_2)
         self.assertIsNotNone(target.eta_window_end_utc)
 
-        # After ETA expiration: Level 2 targets do NOT become LOST
+        # After ETA expiration + 4 minutes buffer: Level 2 target becomes LOST
         after_end = target.eta_window_end_utc + timedelta(minutes=5)
         timeout_alerts = tracker.check_timeouts(now=after_end)
-        self.assertEqual(len(timeout_alerts), 0)
-        self.assertEqual(target.status, TargetStatus.ACTIVE)
-        self.assertEqual(len(tracker.get_active_targets()), 1)
+        self.assertEqual(len(timeout_alerts), 1)
+        self.assertEqual(target.status, TargetStatus.LOST)
+        self.assertIn("Ціль змінила курс / втрачена", timeout_alerts[0].title)
+        self.assertIn("час очікування минув", timeout_alerts[0].body)
+        self.assertEqual(len(tracker.get_active_targets()), 0)
 
-        # It remains unlabeled in store
+        # Labeled OUTCOME_UNKNOWN in learning store
         row = store.conn.execute("SELECT outcome FROM targets WHERE id=?", (target.id,)).fetchone()
-        self.assertIsNone(row["outcome"])
+        self.assertIsNotNone(row)
+        self.assertEqual(row["outcome"], OUTCOME_UNKNOWN)
         store.close()
+
+    def test_divert_keywords_from_profile(self):
+        # 1. Target at Dunaivtsi
+        p1 = RawPost("chan_a", 1, "Реактивний БпЛА на Дунаївці", T0)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 2. Channel reports drone heading to Gorodok / Ternopil
+        p_div = RawPost("chan_a", 2, "Реактивний БпЛА на Городок у північно-західному напрямку", T0 + timedelta(minutes=4))
+        parsed_div = self.normalizer.parse(p_div)
+        self.assertEqual(parsed_div.action, ActionType.DIVERTED)
+
+        alerts = self.tracker.process_message(p_div, parsed_div, now=T0 + timedelta(minutes=4))
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].title, "Ціль змінила курс")
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
 
     def test_multi_channel_lag_deduplication(self):
         """Replicate the real attack episode:

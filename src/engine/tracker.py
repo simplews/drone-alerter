@@ -452,7 +452,7 @@ class TargetTracker:
 
                 body = (
                     "⚪️ Нових повідомлень про рух цілі немає. "
-                    "Можливо локаційно втрачена. "
+                    "Можливо локаційно втрачена або змінила курс. "
                     "Слідкуйте за подальшими повідомленнями."
                 )
                 alerts.append(AlertEvent(
@@ -465,7 +465,44 @@ class TargetTracker:
                 ))
                 continue
 
-            # Case 2: General cleanup for targets older than 45 minutes (e.g. Level 2, Level 3)
+            # Case 2: Level 2 target whose ETA window expired without reaching Level 3
+            if (
+                target.level == AlertLevel.LEVEL_2
+                and target.eta_window_end_utc
+                and now > (target.eta_window_end_utc + timedelta(minutes=4))
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="ETA expired at Level 2 without reaching Level 3",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+
+                source_links: list[tuple[str, str]] = []
+                if target.message_ids:
+                    for ch, mid in target.message_ids[-2:]:
+                        source_links.append((ch, f"https://t.me/{ch}/{mid}"))
+
+                body = (
+                    "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
+                    "Імовірно, змінила курс або втрачена. "
+                    "Слідкуйте за офіційними повідомленнями."
+                )
+                alerts.append(AlertEvent(
+                    target_id=target.id,
+                    level=AlertLevel.INFO,
+                    title="Ціль змінила курс / втрачена",
+                    body=body,
+                    is_silent=True,
+                    source_links=source_links,
+                ))
+                continue
+
+            # Case 3: General cleanup for targets older than 45 minutes (e.g. Level 3)
             if (now - target.last_seen_utc) > timedelta(minutes=45):
                 target.status = TargetStatus.EXPIRED
 
