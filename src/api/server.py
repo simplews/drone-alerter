@@ -1,13 +1,12 @@
 """FastAPI мікро-сервер для healthcheck, моніторингу активних цілей та UptimeRobot."""
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
 
-from src.engine.models import AlertEvent, AlertLevel
-from src.telegram.bot import broadcast_alert, broadcast_siren_event
+from src.telegram.bot import broadcast_siren_event
 from src.utils.time import now_kyiv
 
 app = FastAPI(title="IF Drone Alert API", version="1.1.0")

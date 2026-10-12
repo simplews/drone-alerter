@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -12,7 +12,6 @@ from aiogram.types import Message
 
 from src.engine.models import AlertEvent, AlertLevel
 from src.utils.time import format_kyiv_time, now_kyiv
-
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +233,8 @@ async def broadcast_alert(bot: Bot, subscribers: SubscriberRepository, event: Al
         me = await bot.get_me()
         if me and me.username:
             bot_username = me.username
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 - запасне імʼя бота, не критично
+        logger.warning("Не вдалося отримати імʼя бота, використано типове: %s", exc)
 
     parts = [f"**{event.title}**"]
     if event.body:
