@@ -1,4 +1,4 @@
-"""CLI-утиліта для запуску тестових сповіщень у Telegram-бот (drone / siren / all_clear)."""
+"""CLI utility to send test alerts to the Telegram bot (drone / siren / all_clear)."""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +19,7 @@ from src.utils.time import now_kyiv
 
 
 async def send_via_api(api_url: str, alert_type: str) -> bool:
-    """Пробує надіслати тестове сповіщення через активний HTTP API сервера."""
+    """Try to send a test alert through the active HTTP API of the server."""
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.post(f"{api_url}/test-alert?type={alert_type}")
@@ -35,7 +35,7 @@ async def send_via_api(api_url: str, alert_type: str) -> bool:
 
 
 async def send_directly(alert_type: str) -> None:
-    """Надсилає тестове сповіщення напряму підписникам через токен бота."""
+    """Send a test alert directly to the subscribers with the bot token."""
     from aiogram import Bot
 
     if not settings.telegram_bot_token:
@@ -111,7 +111,7 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Спочатку пробуємо через запущений API, якщо ні — напряму
+    # Try the running API first. If that fails, send directly
     ok = await send_via_api(args.api_url, args.type)
     if not ok:
         await send_directly(args.type)

@@ -1,4 +1,4 @@
-"""Утиліти для роботи з часом та часовим поясом Києва (Europe/Kyiv)."""
+"""Utilities for time and the Kyiv time zone (Europe/Kyiv)."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -8,9 +8,9 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 
 def to_kyiv_time(dt: datetime) -> datetime:
-    """Конвертує datetime у київський часовий пояс (Europe/Kyiv).
+    """Convert a datetime to the Kyiv time zone (Europe/Kyiv).
 
-    Автоматично враховує перехід на літній час (UTC+3, EEST) та зимовий час (UTC+2, EET).
+    It handles the change to summer time (UTC+3, EEST) and winter time (UTC+2, EET) automatically.
     """
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
@@ -18,10 +18,10 @@ def to_kyiv_time(dt: datetime) -> datetime:
 
 
 def now_kyiv() -> datetime:
-    """Повертає поточний час у часовому поясі Києва."""
+    """Return the current time in the Kyiv time zone."""
     return datetime.now(KYIV_TZ)
 
 
 def format_kyiv_time(dt: datetime, fmt: str = "%H:%M") -> str:
-    """Форматує об'єкт datetime у рядок за київським часом."""
+    """Format a datetime object as a string in Kyiv time."""
     return to_kyiv_time(dt).strftime(fmt)

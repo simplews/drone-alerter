@@ -23,7 +23,7 @@ def test_extract_text():
 
 
 def test_parse_posts_and_replay(tmp_path: Path):
-    # Тестуємо як звичайний список повідомлень, так і Telegram export формат
+    # Test both a plain message list and the Telegram export format
     tg_export = {
         "name": "monitoring_test",
         "type": "public_channel",

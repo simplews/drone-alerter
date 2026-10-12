@@ -1,1 +1,1 @@
-"""Ядро аналізу та трекінгу цілей."""
+"""Core of target analysis and tracking."""

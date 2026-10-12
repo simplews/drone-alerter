@@ -1,6 +1,6 @@
-"""Утиліта для вивантаження історії повідомлень з моніторингових каналів через Telethon.
+"""Utility to export the message history from the monitoring channels through Telethon.
 
-Використання:
+Usage:
     python -m src.telegram.export_history --days 4 --output data/historical_posts.json
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ async def export_channel_history(
                         continue
                     msg_date_utc = message.date.astimezone(UTC)
                     if msg_date_utc < since_utc:
-                        break  # дійшли до давніших повідомлень
+                        break  # reached the older messages
 
                     if message.text and message.text.strip():
                         all_posts.append({
@@ -58,7 +58,7 @@ async def export_channel_history(
                 logger.error(f"Помилка вивантаження з @{channel}: {e}")
 
 
-    # Сортуємо в хронологічному порядку
+    # Sort in chronological order
     all_posts.sort(key=lambda p: p["posted_at_utc"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

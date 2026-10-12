@@ -1,10 +1,10 @@
-"""Утиліта для запуску симуляції та роботи в тіньовому режимі (Shadow Mode).
+"""Utility to run the simulation and to work in shadow mode (Shadow Mode).
 
-Підтримує:
-1. Завантаження історичних повідомлень з JSON (як спрощений формат, так і Telegram Desktop export).
-2. Прогін через Normalizer та Tracker із збереженням у LearningStore.
-3. Оцінку критеріїв Go/No-Go (PRD v1.1 розділ 7).
-4. Звіт про поточний стан розмічених цілей та готовність до релізу.
+It supports:
+1. Loading of historical messages from JSON (the simple format and the Telegram Desktop export).
+2. A run through the Normalizer and the Tracker, with storage in LearningStore.
+3. An evaluation of the Go/No-Go criteria (PRD v1.1, section 7).
+4. A report on the labeled targets and on release readiness.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from src.nlp.normalizer import MessageNormalizer
 
 
 def _extract_text(raw_text: Any) -> str:
-    """Витягує текст з формату експорту Telegram (може бути str або list фрагментів)."""
+    """Extract the text from the Telegram export format (it can be a str or a list of fragments)."""
     if isinstance(raw_text, str):
         return raw_text
     if isinstance(raw_text, list):
@@ -43,7 +43,7 @@ def _extract_text(raw_text: Any) -> str:
 
 
 def parse_posts_from_json(path: Path, default_channel: str = "imported") -> list[RawPost]:
-    """Парсить повідомлення з JSON-файлу."""
+    """Parse a message from the JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
     posts: list[RawPost] = []
 
@@ -57,7 +57,7 @@ def parse_posts_from_json(path: Path, default_channel: str = "imported") -> list
             if not text.strip():
                 continue
             date_str = msg.get("date", "")
-            # Telegram export зазвичай "YYYY-MM-DDTHH:MM:SS"
+            # A Telegram export usually has the format "YYYY-MM-DDTHH:MM:SS"
             dt = datetime.fromisoformat(date_str)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=UTC)
@@ -73,7 +73,7 @@ def parse_posts_from_json(path: Path, default_channel: str = "imported") -> list
                 )
             )
     elif isinstance(data, list):
-        # Простий список об'єктів поста
+        # Simple list of post objects
         for item in data:
             dt = parse_utc(item["posted_at_utc"])
             posts.append(
@@ -87,7 +87,7 @@ def parse_posts_from_json(path: Path, default_channel: str = "imported") -> list
     else:
         raise ValueError(f"Невідомий формат JSON у {path}")
 
-    # Сортування за часом публікації
+    # Sort by publication time
     posts.sort(key=lambda p: p.posted_at_utc)
     return posts
 
@@ -97,7 +97,7 @@ def run_historical_replay(
     ref_cache: ActiveReferenceCache,
     store: LearningStore | None = None,
 ) -> tuple[list[AlertEvent], TargetTracker]:
-    """Проганяє історичний потік повідомлень через нормалізатор і трекер."""
+    """Run the historical message stream through the normalizer and the tracker."""
     tracker = TargetTracker(ref_cache, store=store)
     normalizer = MessageNormalizer(ref_cache)
     all_alerts: list[AlertEvent] = []
@@ -111,7 +111,7 @@ def run_historical_replay(
 
 
 def format_scorecard_report(metrics: EvaluationMetrics) -> str:
-    """Форматує текстовий звіт оцінки за критеріями Go/No-Go."""
+    """Format the text evaluation report for the Go/No-Go criteria."""
     lines = [
         "============================================================",
         "          SHADOW MODE EVALUATION SCORECARD (PRD v1.1)        ",
@@ -197,7 +197,7 @@ def main():
             print(f"  {lvl_marker} [{alert.level.value}] {alert.title} | ETA: {alert.eta_window_str or 'н/д'}")
 
         if args.evaluate:
-            # Створюємо один узагальнений епізод симуляції
+            # Create one combined simulation episode
             episodes = [
                 SimulationEpisode(
                     episode_id=args.file.stem,
@@ -211,7 +211,7 @@ def main():
             print(format_scorecard_report(metrics))
 
     elif args.evaluate:
-        # Звіт на основі вже збережених у базі цілей
+        # Report based on the targets that the database already holds
         store = LearningStore(args.db)
         labeled = store.count_labeled()
         unlabeled = len(store.unlabeled_targets())

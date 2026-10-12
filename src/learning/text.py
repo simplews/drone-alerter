@@ -1,4 +1,4 @@
-"""Нормалізація тексту, грубий стемінг топонімів і пошук кандидатів у назви."""
+"""Text normalization, rough stemming of place names and search for name candidates."""
 from __future__ import annotations
 
 import re
@@ -6,8 +6,8 @@ import re
 _APOSTROPHES = re.compile(r"[’'`ʹ]")
 _SPACES = re.compile(r"\s+")
 
-# Закінчення відмінків, які найчастіше трапляються в назвах пунктів.
-# Порядок: від довших до коротших.
+# Case endings that occur most often in point names.
+# Order: from longer to shorter.
 _ENDINGS = sorted(
     [
         "ями", "ами", "ові", "еві", "єві", "ого", "ому", "ець", "ою", "ею", "ій", "ий",
@@ -29,7 +29,7 @@ _PREPOSITIONS = (
     r"на|через|біля|повз|над|до|між)"
 )
 _AFTER_PREP_RE = re.compile(rf"(?:^|[\s(,;:—–-]){_PREPOSITIONS}\s+({_PLACE})")
-# Рядок, який складається лише з назви (типовий формат моніторингових каналів):
+# A line that has only a name (typical format of monitoring channels):
 # "🛵 Борщів", "Тлумач.", "— Скала-Подільська"
 _LINE_ONLY_RE = re.compile(rf"^[^\w{_UPPER}]*({_PLACE})[\s.!,:;)]*$", re.MULTILINE)
 _REGION_SUFFIXES = ("щина", "ччина", "щини", "ччини", "щину", "ччину", "щині", "ччині")
@@ -60,9 +60,9 @@ def _stems_match(a: str, b: str) -> bool:
 
 
 def phrases_match(a: str, b: str) -> bool:
-    """Чи можуть дві фрази бути відмінками однієї назви ("Нову Ушицю" ~ "Нова Ушиця").
+    """True if two phrases can be grammatical cases of one name ("Нову Ушицю" ~ "Нова Ушиця").
 
-    Це евристика: вона дає кандидатів людині на перевірку, а не остаточне рішення.
+    This is a heuristic. It gives candidates to a person for review. It is not a final decision.
     """
     sa, sb = stem_phrase(a), stem_phrase(b)
     return len(sa) == len(sb) and all(_stems_match(x, y) for x, y in zip(sa, sb))
@@ -73,7 +73,7 @@ def is_region_name(phrase: str) -> bool:
 
 
 def extract_place_candidates(text: str) -> list[str]:
-    """Повертає фрази, схожі на назви населених пунктів, з оригінального тексту."""
+    """Return the phrases from the original text that look like names of settlements."""
     found: list[str] = []
     for regex in (_AFTER_PREP_RE, _LINE_ONLY_RE):
         for match in regex.finditer(text):

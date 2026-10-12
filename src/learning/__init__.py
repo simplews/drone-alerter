@@ -1,4 +1,4 @@
-"""Механізм дообучення довідників (словник пунктів, таблиця ETA, базові частоти).
+"""Mechanism to retrain the references (point dictionary, ETA table, base rates).
 
-Див. docs/LEARNING.md.
+See docs/LEARNING.md.
 """

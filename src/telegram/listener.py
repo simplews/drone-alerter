@@ -1,4 +1,4 @@
-"""Асинхронний слухач моніторингових Telegram-каналів через Telethon (MTProto)."""
+"""Async listener for the monitoring Telegram channels through Telethon (MTProto)."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramChannelListener:
-    """Підключається через MTProto до Telegram та транслює події з каналів у реальному часі."""
+    """Connect to Telegram through MTProto and relay the channel events in real time."""
 
     def __init__(
         self,
@@ -47,7 +47,7 @@ class TelegramChannelListener:
         return self._last_event_utc
 
     async def start(self) -> None:
-        """Ініціалізує та запускає клієнт Telethon."""
+        """Initialize and start the Telethon client."""
         if not self.api_id or not self.api_hash:
             logger.warning("TELETHON_API_ID або TELETHON_API_HASH не налаштовані. Слухач не запущено.")
             return
@@ -66,17 +66,17 @@ class TelegramChannelListener:
         self._is_running = True
         logger.info(f"Telethon підключено. Підписка на канали: {self.channels}")
 
-        # Обробник нових повідомлень
+        # Handler for new messages
         @self.client.on(events.NewMessage(chats=self.channels))
         async def handle_new_message(event):
             await self._process_telethon_event(event, is_edit=False)
 
-        # Обробник редагованих повідомлень (Вимога F4)
+        # Handler for edited messages (requirement F4)
         @self.client.on(events.MessageEdited(chats=self.channels))
         async def handle_edited_message(event):
             await self._process_telethon_event(event, is_edit=True)
 
-        # Запуск фонового моніторингу живості з'єднання (Heartbeat)
+        # Start the background connection liveness monitor (heartbeat)
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
     async def _process_telethon_event(self, event, is_edit: bool) -> None:
@@ -99,7 +99,7 @@ class TelegramChannelListener:
             logger.exception("Помилка при обробці події Telegram")
 
     async def _heartbeat_loop(self) -> None:
-        """Перевіряє життєздатність сокета кожні 30 секунд."""
+        """Check the socket liveness every 30 seconds."""
         was_connected = True
         while self._is_running:
             try:

@@ -1,4 +1,4 @@
-"""Трекер життєвого циклу цілей, просторово-часова дедуплікація та диспетчеризація сповіщень."""
+"""Target lifecycle tracker, spatio-temporal deduplication and alert dispatch."""
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class TargetTracker:
-    """Управляє активними гіпотезами цілей, дедуплікацією між каналами та формуванням сповіщень."""
+    """Manage the active target hypotheses, the deduplication between channels and the creation of alerts."""
 
     def __init__(
         self,
@@ -37,9 +37,9 @@ class TargetTracker:
         self._dedup_window = timedelta(minutes=dedup_window_minutes)
         self._max_gap = timedelta(minutes=max_corridor_gap_minutes)
         self._active_targets: dict[str, Target] = {}
-        # Збережені попередні сповіщення для запобігання спаму: target_id -> last_level
+        # Saved earlier alerts that prevent spam: target_id -> last_level
         self._target_last_alerted_level: dict[str, AlertLevel] = {}
-        # Зафіксовані пункти, за якими вже виходило сповіщення: target_id -> set(point_ids)
+        # Points that already caused an alert: target_id -> set(point_ids)
         self._target_alerted_points: dict[str, set[str]] = {}
 
 
@@ -50,7 +50,7 @@ class TargetTracker:
         return self._ref_cache.get()
 
     def _find_matching_target(self, point_id: str, posted_at: datetime) -> Target | None:
-        """Знаходить активну ціль, якій може належати повідомлення."""
+        """Find the active target that the message can belong to."""
         ref = self._get_ref()
         new_point = ref.points.get(point_id)
         if not new_point:
@@ -71,9 +71,9 @@ class TargetTracker:
             if not last_point:
                 continue
 
-            # Дозволено:
-            # 1. Той самий пункт із іншого каналу протягом dedup_window
-            # 2. Новий пункт, що ближче до міста (рівень >= попередньому, або менша відстань)
+            # Allowed:
+            # 1. The same point from a different channel inside dedup_window
+            # 2. A new point that is closer to the city (level >= previous level, or smaller distance)
             is_same_point = (point_id == target.last_point_id) and (time_diff <= self._dedup_window)
             is_forward = False
 
@@ -95,12 +95,12 @@ class TargetTracker:
         parsed: ParsedMessage,
         now: datetime | None = None,
     ) -> list[AlertEvent]:
-        """Обробляє розпарсений пост, оновлює стан цілей і генерує сповіщення."""
+        """Process a parsed post, update the target state and create alerts."""
         now = now or datetime.now(UTC)
         ref = self._get_ref()
         alerts: list[AlertEvent] = []
 
-        # 1. Запис у LearningStore для аналітики та перенавчання
+        # 1. Write to LearningStore for analytics and retraining
         if self._store and (parsed.is_jet or parsed.points):
             self._store.add_post(
                 channel=post.channel,
@@ -110,30 +110,30 @@ class TargetTracker:
                 is_target_related=True,
             )
 
-        # 2. Обробка дій (збито / втрачено / відворот)
+        # 2. Process actions (shot down / lost / turned away)
         if parsed.action in (ActionType.DOWNED, ActionType.LOST, ActionType.DIVERTED):
             action_alerts = self._handle_action(post, parsed, now)
             alerts.extend(action_alerts)
             self._cleanup_expired(now)
             return alerts
 
-        # Якщо в пості немає згадок пунктів — завершуємо
+        # If the post has no point mentions, stop here
         if not parsed.points:
             self._cleanup_expired(now)
             return alerts
 
-        # 3. Обробка пунктів у повідомленні
+        # 3. Process the points in the message
         for point_id in parsed.points:
             point = ref.points.get(point_id)
             if not point:
                 continue
 
-            # Шукаємо відповідну наявну ціль або створюємо нову
+            # Find a matching existing target or create a new one
             target = self._find_matching_target(point_id, post.posted_at_utc)
             is_new_target = False
 
             if target is None:
-                # Створюємо нову ціль
+                # Create a new target
                 is_new_target = True
                 target_id = f"T-{post.posted_at_utc.strftime('%Y%m%d%H%M')}-{uuid.uuid4().hex[:4]}"
                 target = Target(
@@ -150,12 +150,12 @@ class TargetTracker:
                 )
                 self._active_targets[target_id] = target
             else:
-                # Оновлюємо наявну ціль
+                # Update the existing target
                 if point_id not in target.points_sequence:
                     target.points_sequence.append(point_id)
                 target.last_point_id = point_id
                 target.last_seen_utc = post.posted_at_utc
-                # Оновлюємо кількість цілей: якщо у свіжому пості кількість вказана явно — беремо її як найактуальнішу
+                # Update the number of targets: if the new post states the number explicitly, use it as the most current
                 if parsed.explicit_count:
                     target.target_count = parsed.count
 
@@ -163,12 +163,12 @@ class TargetTracker:
                 target.message_ids.append((post.channel, post.message_id))
 
 
-                # Ескалація рівня (рівень може тільки підвищуватись)
+                # Escalate the level (the level can only go up)
                 new_level = determine_level(point_id, point.level)
                 if self._level_rank(new_level) > self._level_rank(target.level):
                     target.level = new_level
 
-            # Фіксація згадки в сховищі навчання
+            # Record the mention in the learning store
             if self._store:
                 self._store.add_mention(
                     target_id=target.id,
@@ -178,7 +178,7 @@ class TargetTracker:
                     message_id=post.message_id,
                 )
 
-            # Розрахунок ETA
+            # Calculate the ETA
             rem_min, rem_max, w_start, w_end, w_str = calculate_eta(
                 point=point,
                 ref=ref,
@@ -190,7 +190,7 @@ class TargetTracker:
             target.eta_window_start_utc = w_start
             target.eta_window_end_utc = w_end
 
-            # Впевненість
+            # Confidence
             if len(target.channels) >= 2 or "на іф" in normalize(post.text) or "франківськ" in normalize(post.text):
                 target.confidence = "high"
             elif len(target.points_sequence) >= 2:
@@ -198,7 +198,7 @@ class TargetTracker:
             else:
                 target.confidence = "low"
 
-            # 4. Формування сповіщення: перша ж поява в пункті одразу дає алерт
+            # 4. Build the alert: the first appearance at a point causes an alert at once
             alerted_points = self._target_alerted_points.setdefault(target.id, set())
             is_new_point_for_target = point_id not in alerted_points
 
@@ -229,16 +229,16 @@ class TargetTracker:
         parsed: ParsedMessage,
         now: datetime,
     ) -> list[AlertEvent]:
-        """Безпечна асиметрична обробка збиття/відвороту (правило F7)."""
+        """Safe asymmetric handling of shoot-down and turn-away (rule F7)."""
         alerts: list[AlertEvent] = []
         target = None
 
-        # Шукаємо ціль за пунктом або найближчу активну
+        # Find the target by point, or the nearest active target
         if parsed.action_point_id:
             target = self._find_matching_target(parsed.action_point_id, post.posted_at_utc)
 
         if target is None and self._active_targets:
-            # Беремо найсвіжішу активну ціль
+            # Take the most recent active target
             active = self.get_active_targets()
             if active:
                 target = max(active, key=lambda t: t.last_seen_utc)
@@ -257,7 +257,7 @@ class TargetTracker:
 
         if parsed.action in (ActionType.DOWNED, ActionType.LOST):
             if target.target_count > 1:
-                # Зменшуємо лічильник цілей у групі
+                # Decrease the target counter in the group
                 target.target_count -= 1
                 body = (
                     f"⚪️ За повідомленнями каналів, одну ціль у районі {point_name}, "
@@ -316,7 +316,7 @@ class TargetTracker:
         point_display = point.names[0].capitalize() if point.names else target.last_point_id
         count_prefix = f"{target.target_count}х " if target.target_count > 1 else ""
 
-        # Збираємо посилання на першоджерела
+        # Collect the links to the original sources
         source_links: list[tuple[str, str]] = []
         if post and post.channel and post.message_id:
             source_links.append((post.channel, f"https://t.me/{post.channel}/{post.message_id}"))
@@ -368,7 +368,7 @@ class TargetTracker:
         return ranks.get(level, 0)
 
     def _cleanup_expired(self, now: datetime) -> None:
-        """Переводить у застарілі цілі, за якими немає оновлень понад 45 хв."""
+        """Mark as stale the targets that have no update for more than 45 minutes."""
         for target in list(self._active_targets.values()):
             if target.status == TargetStatus.ACTIVE and (now - target.last_seen_utc) > timedelta(minutes=45):
                 target.status = TargetStatus.EXPIRED

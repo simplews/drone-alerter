@@ -1,6 +1,6 @@
-"""Тести механізму навчання. Усі дані тут СИНТЕТИЧНІ (не реальні епізоди).
+"""Tests for the learning mechanism. All data here is SYNTHETIC (not real episodes).
 
-Запуск: python3 -m unittest discover -s tests -v
+Run: python3 -m unittest discover -s tests -v
 """
 import tempfile
 import unittest
@@ -45,7 +45,7 @@ class TextTests(unittest.TestCase):
         self.assertTrue(phrases_match("Дунаївцях", "Дунаївці"))
         self.assertTrue(phrases_match("Камʼянці-Подільському", "Кам'янець-Подільський"))
         self.assertFalse(phrases_match("Борщів", "Тлумач"))
-        self.assertFalse(phrases_match("Нова Ушиця", "Ушиця"))  # різна кількість слів
+        self.assertFalse(phrases_match("Нова Ушиця", "Ушиця"))  # different number of words
 
     def test_normalize_apostrophes_and_abbrev(self):
         self.assertEqual(normalize("Кам'янець"), normalize("Камʼянець"))
@@ -81,7 +81,7 @@ class RepositoryTests(unittest.TestCase):
         cache = ActiveReferenceCache(self.repo)
         self.assertEqual(cache.get().version, 1)
         self.repo.promote(v2.version)
-        self.assertEqual(cache.get().version, 2)  # підхоплено без перезапуску
+        self.assertEqual(cache.get().version, 2)  # picked up without a restart
         self.assertEqual(self.repo.load(1).status, STATUS_ARCHIVED)
 
         self.assertEqual(self.repo.rollback(), 1)
@@ -101,16 +101,16 @@ class CalibrationTests(unittest.TestCase):
     def test_small_n_only_widens(self):
         p = PointRef("x", ["x"], 2, eta_min=14, eta_max=21, eta_method="seed")
         lo, hi, _ = calibrate_point(p, [16, 17], [340, 450], [1, 3], self.cfg)
-        self.assertEqual((lo, hi), (14, 21))  # нові дані всередині — не звужуємо
+        self.assertEqual((lo, hi), (14, 21))  # new data is inside the range, so do not narrow it
         lo, hi, _ = calibrate_point(p, [11, 25], [340, 450], [1, 3], self.cfg)
-        self.assertEqual((lo, hi), (9, 27))  # нові дані ширші — розширюємо одразу
+        self.assertEqual((lo, hi), (9, 27))  # new data is wider, so widen at once
 
     def test_large_n_narrows_gradually(self):
         p = PointRef("x", ["x"], 2, eta_min=10, eta_max=30, eta_method="seed")
         durations = [17, 18, 18, 19, 19, 20, 20, 21, 21, 22]
         lo, hi, method = calibrate_point(p, durations, [340, 450], [1, 3], self.cfg)
         self.assertEqual(method, "empirical_q")
-        self.assertEqual((lo, hi), (13, 27))  # не більше ніж на 3 хв за раз
+        self.assertEqual((lo, hi), (13, 27))  # at most 3 minutes at a time
 
     def test_physics_prior_for_new_point(self):
         p = PointRef("chernelytsia", ["чернелиця"], 3, distance_km=54)
@@ -164,16 +164,16 @@ class PipelineTests(unittest.TestCase):
         for i in range(1, 6):
             self._add_reached(i, borshchiv_min=24 + i % 2, tlumach_min=5)
         obs = [o for o in self.store.arrival_observations() if o.point_id == "borshchiv"]
-        self.assertEqual(len(obs), 5)  # по одному на ціль, найраніший канал
+        self.assertEqual(len(obs), 5)  # one for each target, the earliest channel
         report = retrain(self.store, self.repo, now=self.now)
         self.assertEqual(report.status, "pending")
-        self.assertEqual(self.repo.active_version(), 1)  # без схвалення не активується
+        self.assertEqual(self.repo.active_version(), 1)  # not active without approval
         new = self.repo.load(report.version)
-        self.assertEqual(new.points["borshchiv"].eta_max, 18.0)  # фізична межа відстані 95 км при 400 км/год
+        self.assertEqual(new.points["borshchiv"].eta_max, 18.0)  # physical limit: distance 95 km at 400 km/h
         self.assertTrue(any("borshchiv" in line for line in diff(self.repo.active(), new)))
 
     def test_second_retrain_without_new_data_is_skipped(self):
-        for i in range(1, 11):  # 10 цілей -> 3 у перевірці
+        for i in range(1, 11):  # 10 targets -> 3 in the check
             self._add_reached(i, 24, 5)
         first = retrain(self.store, self.repo, auto_promote=True, now=self.now)
         self.assertEqual(first.status, "promoted")
@@ -190,14 +190,14 @@ class PipelineTests(unittest.TestCase):
     def test_alias_discovery_and_approval_flow(self):
         self.store.add_post("chan_a", 1, T0, "Реактивна герань через Скалат на захід", True)
         self.store.add_post("chan_a", 2, T0, "Реактивна герань на Борщеві", True)
-        self.store.add_post("chan_a", 3, T0, "Через Скалат ще одна", False)  # не про ціль
+        self.store.add_post("chan_a", 3, T0, "Через Скалат ще одна", False)  # not about a target
         discover_aliases(self.store, self.repo.active())
         cands = {c.phrase_norm: c for c in self.store.alias_candidates()}
         self.assertIn("скалат", cands)
         self.assertEqual(cands["скалат"].count, 1)
-        self.assertNotIn("борщеві", cands)  # вже є в словнику
+        self.assertNotIn("борщеві", cands)  # already in the dictionary
 
-        # Повторне сканування не дублює лічильник
+        # A second scan does not duplicate the counter
         discover_aliases(self.store, self.repo.active())
         self.assertEqual(self.store.alias_candidates()[0].count, 1)
 
