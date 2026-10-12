@@ -29,6 +29,7 @@ from src.learning.store import (
     OUTCOME_DIVERTED,
     OUTCOME_DOWNED,
     OUTCOME_REACHED,
+    OUTCOME_UNKNOWN,
     ArrivalObservation,
     LearningStore,
     OutcomeRow,
@@ -213,6 +214,24 @@ class PipelineTests(unittest.TestCase):
         before = active.points["borshchiv"].eta_max
         build_candidate(active, [ArrivalObservation("t", "borshchiv", T0, 40)], [], [], CalibrationConfig())
         self.assertEqual(active.points["borshchiv"].eta_max, before)
+
+    def test_level_3_target_cannot_be_labeled_unknown(self):
+        # Target with Level 1 mention can be labeled unknown
+        self.store.add_mention("T_LVL1", "nova_ushytsia", "chan_a", T0)
+        self.store.label_target("T_LVL1", OUTCOME_UNKNOWN)
+        row = self.store.conn.execute("SELECT outcome FROM targets WHERE id='T_LVL1'").fetchone()
+        self.assertEqual(row["outcome"], OUTCOME_UNKNOWN)
+
+        # Target with Level 3 mention (e.g. tlumach) CANNOT be labeled unknown
+        self.store.add_mention("T_LVL3", "tlumach", "chan_a", T0)
+        with self.assertRaises(ValueError) as ctx:
+            self.store.label_target("T_LVL3", OUTCOME_UNKNOWN)
+        self.assertIn("рівня 3", str(ctx.exception))
+
+        # But it CAN be labeled downed_en_route, diverted or reached_target
+        self.store.label_target("T_LVL3", OUTCOME_DOWNED)
+        row3 = self.store.conn.execute("SELECT outcome FROM targets WHERE id='T_LVL3'").fetchone()
+        self.assertEqual(row3["outcome"], OUTCOME_DOWNED)
 
 
 if __name__ == "__main__":

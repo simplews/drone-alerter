@@ -166,6 +166,22 @@ class LearningStore:
             raise ValueError("Для reached_target потрібен час прибуття (arrived_at)")
         if outcome != OUTCOME_REACHED and arrived_at is not None:
             raise ValueError("Час прибуття вказується лише для reached_target")
+        if outcome == OUTCOME_UNKNOWN:
+            rows = self.conn.execute(
+                "SELECT DISTINCT point_id FROM mentions WHERE target_id = ?",
+                (target_id,),
+            ).fetchall()
+            mentioned = {r["point_id"] for r in rows}
+            try:
+                from src.profile import get_profile
+                lvl3_points = {p["id"] for p in get_profile().points if p.get("level") == 3}
+            except Exception:  # noqa: BLE001
+                lvl3_points = {"chernelytsia", "tlumach", "tysmenytsia", "khryplyn"}
+            if mentioned & lvl3_points:
+                raise ValueError(
+                    "Для цілей рівня 3 неприпустимий результат 'unknown'. "
+                    "Дозволено лише reached_target, downed_en_route або diverted"
+                )
         with self.conn:
             cur = self.conn.execute(
                 "UPDATE targets SET outcome=?, arrived_at_utc=?, labeled_at_utc=?, notes=? WHERE id=?",

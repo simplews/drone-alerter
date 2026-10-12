@@ -82,6 +82,16 @@ class TestMessageNormalizer(unittest.TestCase):
         # It must be 1, not 2!
         self.assertEqual(parsed.count, 1)
 
+    def test_new_target_marker(self):
+        post = RawPost("chan_a", 30, "Ще один реактивний БпЛА на Нову Ушицю", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertTrue(parsed.is_jet)
+        self.assertTrue(parsed.is_new_target_marker)
+
+        post2 = RawPost("chan_a", 31, "Реактивний БпЛА на Нову Ушицю", T0)
+        parsed2 = self.normalizer.parse(post2)
+        self.assertFalse(parsed2.is_new_target_marker)
+
 
 if __name__ == "__main__":
     unittest.main()

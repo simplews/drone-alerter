@@ -28,6 +28,7 @@ class TargetStatus(str, Enum):
     PROBABLY_DOWNED = "probably_downed"
     DIVERTED = "diverted"
     EXPIRED = "expired"
+    LOST = "lost"
 
 
 @dataclass
@@ -45,6 +46,7 @@ class ParsedMessage:
     points: list[str]          # IDs of points in the order of mention
     count: int = 1             # number of targets (default 1)
     explicit_count: bool = False  # True if the text states the number explicitly (for example 2х, 1 ціль)
+    is_new_target_marker: bool = False  # True if text explicitly mentions another/new target (e.g. ще один)
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
     raw_text: str = ""

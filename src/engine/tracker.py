@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from src.engine.eta import calculate_eta, determine_level
@@ -16,9 +17,8 @@ from src.engine.models import (
     TargetStatus,
 )
 from src.learning.reference import ActiveReferenceCache, ReferenceData
-from src.learning.store import LearningStore
+from src.learning.store import OUTCOME_UNKNOWN, LearningStore
 from src.learning.text import normalize
-from src.profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +32,13 @@ class TargetTracker:
         store: LearningStore | None = None,
         dedup_window_minutes: float = 6.0,
         max_corridor_gap_minutes: float = 35.0,
+        is_siren_active_fn: Callable[[], bool] | None = None,
     ):
         self._ref_cache = ref_cache
         self._store = store
         self._dedup_window = timedelta(minutes=dedup_window_minutes)
         self._max_gap = timedelta(minutes=max_corridor_gap_minutes)
+        self._is_siren_active_fn = is_siren_active_fn or (lambda: False)
         self._active_targets: dict[str, Target] = {}
         # Saved earlier alerts that prevent spam: target_id -> last_level
         self._target_last_alerted_level: dict[str, AlertLevel] = {}
@@ -50,8 +52,16 @@ class TargetTracker:
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
 
-    def _find_matching_target(self, point_id: str, posted_at: datetime) -> Target | None:
+    def _find_matching_target(
+        self,
+        point_id: str,
+        posted_at: datetime,
+        is_new_target_marker: bool = False,
+    ) -> Target | None:
         """Find the active target that the message can belong to."""
+        if is_new_target_marker:
+            return None
+
         ref = self._get_ref()
         new_point = ref.points.get(point_id)
         if not new_point:
@@ -72,19 +82,31 @@ class TargetTracker:
             if not last_point:
                 continue
 
-            # Allowed:
-            # 1. The same point from a different channel inside dedup_window
-            # 2. A new point that is closer to the city (level >= previous level, or smaller distance)
+            # Check if this point matches the target track:
+            # 1. Point already visited in this target's sequence (delayed report from another channel)
+            is_in_sequence = point_id in target.points_sequence and time_diff <= timedelta(minutes=15)
+
+            # 2. Same point as the current last_point_id inside dedup window
             is_same_point = (point_id == target.last_point_id) and (time_diff <= self._dedup_window)
+
+            # 3. Target advancing forward towards the protected city
             is_forward = False
+            if last_point.distance_km and new_point.distance_km:
+                is_forward = (new_point.distance_km <= last_point.distance_km + 10.0)
+            else:
+                is_forward = (new_point.level >= last_point.level)
 
-            if not is_same_point:
-                if last_point.distance_km and new_point.distance_km:
-                    is_forward = (new_point.distance_km <= last_point.distance_km + 10.0)
-                else:
-                    is_forward = (new_point.level >= last_point.level)
+            # 4. Upstream point reported with latency from a slower channel
+            # (e.g. kpszsu reporting an upstream point a few minutes after monitoring reported downstream)
+            is_lagged_upstream = False
+            if last_point.distance_km and new_point.distance_km:
+                dist_diff = new_point.distance_km - last_point.distance_km
+                if 0.0 < dist_diff <= 70.0 and time_diff <= timedelta(minutes=8):
+                    is_lagged_upstream = True
+            elif new_point.level == last_point.level and time_diff <= timedelta(minutes=10):
+                is_lagged_upstream = True
 
-            if (is_same_point or is_forward) and time_diff < min_time_diff:
+            if (is_in_sequence or is_same_point or is_forward or is_lagged_upstream) and time_diff < min_time_diff:
                 min_time_diff = time_diff
                 candidate = target
 
@@ -115,12 +137,12 @@ class TargetTracker:
         if parsed.action in (ActionType.DOWNED, ActionType.LOST, ActionType.DIVERTED):
             action_alerts = self._handle_action(post, parsed, now)
             alerts.extend(action_alerts)
-            self._cleanup_expired(now)
+            alerts.extend(self.check_timeouts(now))
             return alerts
 
         # If the post has no point mentions, stop here
         if not parsed.points:
-            self._cleanup_expired(now)
+            alerts.extend(self.check_timeouts(now))
             return alerts
 
         # 3. Process the points in the message
@@ -130,12 +152,18 @@ class TargetTracker:
                 continue
 
             # Find a matching existing target or create a new one
-            target = self._find_matching_target(point_id, post.posted_at_utc)
+            target = self._find_matching_target(
+                point_id,
+                post.posted_at_utc,
+                is_new_target_marker=parsed.is_new_target_marker,
+            )
             is_new_target = False
+            is_advance = False
 
             if target is None:
                 # Create a new target
                 is_new_target = True
+                is_advance = True
                 target_id = f"T-{post.posted_at_utc.strftime('%Y%m%d%H%M')}-{uuid.uuid4().hex[:4]}"
                 target = Target(
                     id=target_id,
@@ -154,15 +182,27 @@ class TargetTracker:
                 # Update the existing target
                 if point_id not in target.points_sequence:
                     target.points_sequence.append(point_id)
-                target.last_point_id = point_id
-                target.last_seen_utc = post.posted_at_utc
+
+                # Keep target.last_point_id monotonic (closest to protected city)
+                curr_last_pt = ref.points.get(target.last_point_id)
+                if curr_last_pt and curr_last_pt.distance_km and point.distance_km:
+                    if point.distance_km < curr_last_pt.distance_km:
+                        target.last_point_id = point_id
+                        is_advance = True
+                else:
+                    new_pt_level = determine_level(point_id, point.level)
+                    if self._level_rank(new_pt_level) > self._level_rank(target.level):
+                        target.last_point_id = point_id
+                        is_advance = True
+
+                target.last_seen_utc = max(target.last_seen_utc, post.posted_at_utc)
+
                 # Update the number of targets: if the new post states the number explicitly, use it as the most current
                 if parsed.explicit_count:
                     target.target_count = parsed.count
 
                 target.channels.add(post.channel)
                 target.message_ids.append((post.channel, post.message_id))
-
 
                 # Escalate the level (the level can only go up)
                 new_level = determine_level(point_id, point.level)
@@ -179,9 +219,10 @@ class TargetTracker:
                     message_id=post.message_id,
                 )
 
-            # Calculate the ETA
+            # Calculate the ETA using the furthest forward point on the track
+            calc_point = ref.points.get(target.last_point_id, point)
             rem_min, rem_max, w_start, w_end, w_str = calculate_eta(
-                point=point,
+                point=calc_point,
                 ref=ref,
                 post_time_utc=post.posted_at_utc,
                 current_time_utc=now,
@@ -199,29 +240,33 @@ class TargetTracker:
             else:
                 target.confidence = "low"
 
-            # 4. Build the alert: the first appearance at a point causes an alert at once
+            # 4. Build the alert
+            # Only trigger a new alert if the target advanced to a new point, escalated level, or is brand new.
+            # Lagged/repeated upstream posts are treated as non-alert updates (is_update=True).
             alerted_points = self._target_alerted_points.setdefault(target.id, set())
             is_new_point_for_target = point_id not in alerted_points
-
             last_alerted = self._target_last_alerted_level.get(target.id)
             should_alert = False
             is_update = False
 
-            if is_new_target or last_alerted is None or is_new_point_for_target or self._level_rank(target.level) > self._level_rank(last_alerted):
+            level_escalated = (last_alerted is not None and self._level_rank(target.level) > self._level_rank(last_alerted))
+            point_advanced = (is_advance and is_new_point_for_target)
+
+            if is_new_target or last_alerted is None or level_escalated or point_advanced:
                 should_alert = True
                 alerted_points.add(point_id)
-            elif last_alerted == target.level:
+            else:
                 is_update = True
 
             if should_alert or is_update:
-                alert = self._build_alert(target, point, w_str, post=post, is_update=is_update)
+                alert = self._build_alert(target, calc_point, w_str, post=post, is_update=is_update)
                 alerts.append(alert)
                 if should_alert:
                     self._target_last_alerted_level[target.id] = target.level
 
 
 
-        self._cleanup_expired(now)
+        alerts.extend(self.check_timeouts(now))
         return alerts
 
     def _handle_action(
@@ -291,10 +336,16 @@ class TargetTracker:
 
         elif parsed.action == ActionType.DIVERTED:
             target.status = TargetStatus.DIVERTED
-            body = (
-                f"↗️ Ціль у районі {point_name} змінила курс і відвернула з коридору {get_profile().texts['divert_phrase']}. "
-                f"Слідкуйте за офіційними повідомленнями."
-            )
+            if self._is_siren_active_fn():
+                body = (
+                    f"↗️ Ціль у районі {point_name} змінила курс і прямує в іншому напрямку. "
+                    f"Залишайтеся в укриттях до оголошення відбою."
+                )
+            else:
+                body = (
+                    "↗️ Ціль змінила курс у напрямку іншої області. "
+                    "Слідкуйте за офіційними повідомленнями."
+                )
             alerts.append(AlertEvent(
                 target_id=target.id,
                 level=AlertLevel.INFO,
@@ -368,8 +419,91 @@ class TargetTracker:
         }
         return ranks.get(level, 0)
 
-    def _cleanup_expired(self, now: datetime) -> None:
-        """Mark as stale the targets that have no update for more than 45 minutes."""
+    def check_timeouts(self, now: datetime | None = None) -> list[AlertEvent]:
+        """Check for expired targets and transition them to lost or expired state."""
+        now = now or datetime.now(UTC)
+        alerts: list[AlertEvent] = []
+
         for target in list(self._active_targets.values()):
-            if target.status == TargetStatus.ACTIVE and (now - target.last_seen_utc) > timedelta(minutes=45):
+            if target.status != TargetStatus.ACTIVE:
+                continue
+
+            # Case 1: Level 1 target whose ETA window expired without reaching Level 2
+            if (
+                target.level == AlertLevel.LEVEL_1
+                and target.eta_window_end_utc
+                and now > target.eta_window_end_utc
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="ETA expired at Level 1 without reaching Level 2",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+
+                source_links: list[tuple[str, str]] = []
+                if target.message_ids:
+                    for ch, mid in target.message_ids[-2:]:
+                        source_links.append((ch, f"https://t.me/{ch}/{mid}"))
+
+                body = (
+                    "⚪️ Нових повідомлень про рух цілі немає. "
+                    "Можливо локаційно втрачена або змінила курс. "
+                    "Слідкуйте за подальшими повідомленнями."
+                )
+                alerts.append(AlertEvent(
+                    target_id=target.id,
+                    level=AlertLevel.INFO,
+                    title="Ціль локаційно втрачена",
+                    body=body,
+                    is_silent=True,
+                    source_links=source_links,
+                ))
+                continue
+
+            # Case 2: Level 2 target whose ETA window expired without reaching Level 3
+            if (
+                target.level == AlertLevel.LEVEL_2
+                and target.eta_window_end_utc
+                and now > (target.eta_window_end_utc + timedelta(minutes=4))
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="ETA expired at Level 2 without reaching Level 3",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+
+                source_links: list[tuple[str, str]] = []
+                if target.message_ids:
+                    for ch, mid in target.message_ids[-2:]:
+                        source_links.append((ch, f"https://t.me/{ch}/{mid}"))
+
+                body = (
+                    "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
+                    "Імовірно, змінила курс або втрачена. "
+                    "Слідкуйте за офіційними повідомленнями."
+                )
+                alerts.append(AlertEvent(
+                    target_id=target.id,
+                    level=AlertLevel.INFO,
+                    title="Ціль змінила курс / втрачена",
+                    body=body,
+                    is_silent=True,
+                    source_links=source_links,
+                ))
+                continue
+
+            # Case 3: General cleanup for targets older than 45 minutes (e.g. Level 3)
+            if (now - target.last_seen_utc) > timedelta(minutes=45):
                 target.status = TargetStatus.EXPIRED
+
+        return alerts

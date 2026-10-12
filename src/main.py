@@ -55,7 +55,11 @@ class Application:
 
         # 2. Domain core
         self.normalizer = MessageNormalizer(self.ref_cache)
-        self.tracker = TargetTracker(self.ref_cache, store=self.learning_store)
+        self.tracker = TargetTracker(
+            self.ref_cache,
+            store=self.learning_store,
+            is_siren_active_fn=lambda: bool(self.siren_service and self.siren_service.get_current_state().is_active),
+        )
 
         # 3. Official air-raid alert service
         self.siren_service: AerialAlertService | None = None
@@ -137,7 +141,7 @@ class Application:
             time_str = now_kyiv().strftime("%H:%M")
             title = "🚨🔴 **ПОВІТРЯНА ТРИВОГА!**"
             body = (
-                f"В **{state.region}** оголошено офіційну повітряну тривогу (о {time_str})!\n\n"
+                f"В **{state.region}** оголошено повітряну тривогу (о {time_str})!\n\n"
                 f"Негайно прямуйте в укриття або перебувайте в безпечному місці!\n"
                 f"Слідкуйте за офіційними повідомленнями ОВА та Повітряних сил."
             )
@@ -154,6 +158,21 @@ class Application:
             )
             await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)
 
+    async def _timeouts_loop(self) -> None:
+        """Periodically check for expired targets and broadcast alerts if any."""
+        while True:
+            await asyncio.sleep(15.0)
+            try:
+                alerts = self.tracker.check_timeouts()
+                for alert in alerts:
+                    logger.info(f"🚨 [ТАЙМАУТ/СПОЗВІЩЕННЯ] {alert.title} (ціль={alert.target_id})")
+                    if self.bot:
+                        await broadcast_alert(self.bot, self.subscriber_repo, alert)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Помилка в _timeouts_loop")
+
     async def run(self) -> None:
         logger.info("Запуск сервісу попередження про реактивні БпЛА та повітряні тривоги...")
 
@@ -168,6 +187,9 @@ class Application:
         )
         server = uvicorn.Server(config)
         tasks.append(asyncio.create_task(server.serve()))
+
+        # Start the background timeouts checker
+        tasks.append(asyncio.create_task(self._timeouts_loop()))
 
         # Start the air-raid alert monitor in the background
         if self.siren_service:
