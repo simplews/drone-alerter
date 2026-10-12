@@ -90,7 +90,9 @@ class MessageNormalizer:
 
         # 5. Підрахунок кількості цілей (локально для знайдених пунктів, щоб уникнути хибних спрацьовувань зі зведених повідомлень)
         count = 1
+        explicit_count = False
         if points_found and matched_spans:
+
             # Визначаємо локальний контекст навколо знайдених пунктів
             # Знаходимо межі абзаців або рядків, у яких згадуються знайдені пункти
             first_span_start = min(s for s, e in matched_spans)
@@ -113,12 +115,14 @@ class MessageNormalizer:
                 m = pattern.search(local_text)
                 if m:
                     count = extractor(m)
+                    explicit_count = True
                     break
         else:
             for pattern, extractor in _COUNT_PATTERNS:
                 m = pattern.search(text)
                 if m:
                     count = extractor(m)
+                    explicit_count = True
                     break
 
         # Якщо є підтвердження реактивної цілі — продовжуємо контекстне вікно каналу
@@ -133,8 +137,10 @@ class MessageNormalizer:
             is_jet=is_jet,
             points=points_found,
             count=count,
+            explicit_count=explicit_count,
             action=action,
             action_point_id=action_point,
             raw_text=text,
         )
+
 

@@ -155,9 +155,13 @@ class TargetTracker:
                     target.points_sequence.append(point_id)
                 target.last_point_id = point_id
                 target.last_seen_utc = post.posted_at_utc
-                target.target_count = max(target.target_count, parsed.count)
+                # Оновлюємо кількість цілей: якщо у свіжому пості кількість вказана явно — беремо її як найактуальнішу
+                if parsed.explicit_count:
+                    target.target_count = parsed.count
+
                 target.channels.add(post.channel)
                 target.message_ids.append((post.channel, post.message_id))
+
 
                 # Ескалація рівня (рівень може тільки підвищуватись)
                 new_level = determine_level(point_id, point.level)

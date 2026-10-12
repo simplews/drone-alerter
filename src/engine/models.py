@@ -44,9 +44,11 @@ class ParsedMessage:
     is_jet: bool
     points: list[str]          # id пунктів у порядку згадки
     count: int = 1             # кількість цілей (за замовчуванням 1)
+    explicit_count: bool = False  # чи було в тексті явно вказано кількість (наприклад, 2х, 1 ціль)
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
     raw_text: str = ""
+
 
 
 @dataclass

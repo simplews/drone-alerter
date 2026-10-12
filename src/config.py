@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     telethon_string_session: str = ""
     telegram_bot_token: str = ""
     
-    monitored_channels: list[str] = ["monitoring_zaxid", "kudy_letyt", "monitorwarr"]
+    monitored_channels: list[str] = ["monitoring_zaxid", "kpszsu", "kudy_letyt", "monitorwarr"]
+
     reference_dir: str = "data/reference"
     learning_db_path: str = "data/learning.db"
     subscribers_db_path: str = "data/subscribers.db"
