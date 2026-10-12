@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from src.engine.models import AlertLevel
 from src.learning.calibration import physics_interval
 from src.learning.reference import PointRef, ReferenceData
+from src.utils.time import format_kyiv_time
 
 
 def calculate_eta(
@@ -39,10 +40,10 @@ def calculate_eta(
     rem_min = max(0.0, base_min - elapsed_minutes)
     rem_max = max(0.0, base_max - elapsed_minutes)
 
-    # 4. Форматування для користувача (локальний час + діапазон хв)
+    # 4. Форматування для користувача за київським часом (Europe/Kyiv)
     # Формат: "22:50–22:58 (за 25–33 хв)"
-    start_str = window_start.strftime("%H:%M")
-    end_str = window_end.strftime("%H:%M")
+    start_str = format_kyiv_time(window_start)
+    end_str = format_kyiv_time(window_end)
     min_int = round(rem_min)
     max_int = round(rem_max)
 

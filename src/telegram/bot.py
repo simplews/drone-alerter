@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -11,6 +11,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.engine.models import AlertEvent
+from src.utils.time import format_kyiv_time, now_kyiv
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +81,16 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
     @dp.message(Command("test"))
     async def cmd_test(message: Message):
+        now_k = now_kyiv()
+        t_start = (now_k + timedelta(minutes=8)).strftime("%H:%M")
+        t_end = (now_k + timedelta(minutes=15)).strftime("%H:%M")
         test_alert = (
             "🧪 **ТЕСТОВЕ СПОВІЩЕННЯ СИСТЕМИ (Перевірка звуку)**\n\n"
             "🔴 **[Рівень 2] [2х] Ціль наближається (Товсте)**\n"
-            "⏱ **Орієнтовний час підльоту:** 8–15 хв\n"
+            f"⏱ **Розрахункове вікно біля міста:** {t_start}–{t_end} (за 8–15 хв)\n"
             "📍 **Напрямок:** Товсте → Городенка → Тлумач → Івано-Франківськ\n\n"
+            "⚠️ *Час підльоту є виключно довідковим розрахунком і може змінюватися "
+            "через маневри або зміну курсу. Не орієнтуйтеся на нього як на істину — переходьте в безпечні місця!*\n\n"
             "🔔 Це сповіщення надіслано з увімкненим звуком (не silent). "
             "Перевірте, чи спрацював сигнал на вашому телефоні у поточному режимі (DND/Focus)."
         )
@@ -115,13 +121,21 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         else:
             lines.append(f"⚠️ **Зафіксовано активних цілей на коридорі: {len(active)}**\n")
             for t in active:
+                eta_str = f"{t.eta_min_minutes:.0f}–{t.eta_max_minutes:.0f} хв"
+                if t.eta_window_start_utc and t.eta_window_end_utc:
+                    s_k = format_kyiv_time(t.eta_window_start_utc)
+                    e_k = format_kyiv_time(t.eta_window_end_utc)
+                    eta_str = f"{s_k}–{e_k} ({eta_str})"
+                last_seen_k = format_kyiv_time(t.last_seen_utc)
                 lines.append(
                     f"• **Ціль {t.id}** ({t.target_count}х)\n"
-                    f"  Останній пункт: {t.last_point_id}\n"
+                    f"  Останній пункт: {t.last_point_id} (о {last_seen_k})\n"
                     f"  Рівень: {t.level.value}\n"
-                    f"  Вікно біля міста: {t.eta_min_minutes:.0f}–{t.eta_max_minutes:.0f} хв\n"
+                    f"  Вікно біля міста: {eta_str}\n"
                 )
 
+        now_str = now_kyiv().strftime("%H:%M:%S")
+        lines.append(f"\n🕒 _Станом на {now_str} (Київ)_")
         await message.answer("\n".join(lines), parse_mode="Markdown")
 
     @dp.message(Command("stop"))

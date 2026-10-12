@@ -29,6 +29,7 @@ from src.telegram.bot import (
     create_bot_dispatcher,
 )
 from src.telegram.listener import TelegramChannelListener
+from src.utils.time import now_kyiv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -133,9 +134,10 @@ class Application:
     async def on_siren_start(self, state: SirenState) -> None:
         logger.warning(f"🚨 [ПОВІТРЯНА ТРИВОГА] Оголошено тривогу: {state.region}")
         if self.bot:
+            time_str = now_kyiv().strftime("%H:%M")
             title = "🚨🔴 **ПОВІТРЯНА ТРИВОГА!**"
             body = (
-                f"В **{state.region}** оголошено офіційну повітряну тривогу!\n\n"
+                f"В **{state.region}** оголошено офіційну повітряну тривогу (о {time_str})!\n\n"
                 f"Негайно прямуйте в укриття або перебувайте в безпечному місці!\n"
                 f"Слідкуйте за офіційними повідомленнями ОВА та Повітряних сил."
             )
@@ -144,9 +146,10 @@ class Application:
     async def on_siren_end(self, state: SirenState) -> None:
         logger.info(f"🟢 [ВІДБІЙ ТРИВОГИ] Відбій повітряної тривоги: {state.region}")
         if self.bot:
+            time_str = now_kyiv().strftime("%H:%M")
             title = "🟢 **ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"В **{state.region}** оголошено відбій повітряної тривоги.\n\n"
+                f"В **{state.region}** оголошено відбій повітряної тривоги (о {time_str}).\n\n"
                 f"Загроза минула. Будьте уважні та бережіть себе!"
             )
             await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)

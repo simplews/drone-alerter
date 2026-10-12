@@ -1,13 +1,14 @@
 """FastAPI мікро-сервер для healthcheck, моніторингу активних цілей та UptimeRobot."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI
 
 from src.engine.models import AlertEvent, AlertLevel
 from src.telegram.bot import broadcast_alert, broadcast_siren_event
+from src.utils.time import now_kyiv
 
 app = FastAPI(title="IF Drone Alert API", version="1.1.0")
 
@@ -96,10 +97,13 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     if count == 0:
         return {"status": "warning", "message": "Немає зареєстрованих підписників у базі"}
 
+    now_k = now_kyiv()
+    time_str = now_k.strftime("%H:%M")
+
     if type == "siren":
         title = "🧪🚨🔴 **[ТЕСТ] ПОВІТРЯНА ТРИВОГА!**"
         body = (
-            "Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області**.\n\n"
+            f"Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області** (о {time_str}).\n\n"
             "⚠️ Реальної небезпеки немає — це перевірка звуку та доставки.\n"
             "Перевірте, чи спрацював звуковий сигнал/вібрація."
         )
@@ -107,25 +111,28 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     elif type == "all_clear":
         title = "🧪🟢 **[ТЕСТ] ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
         body = (
-            "Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області**.\n\n"
+            f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області** (о {time_str}).\n\n"
             "Тест доставки сигналу відбою."
         )
         await broadcast_siren_event(_bot, _subscribers, title, body, is_silent=False)
     else:  # "drone"
+        t_start = (now_k + timedelta(minutes=8)).strftime("%H:%M")
+        t_end = (now_k + timedelta(minutes=15)).strftime("%H:%M")
+        window_str = f"{t_start}–{t_end} (за 8–15 хв)"
         event = AlertEvent(
             target_id="TEST-TARGET",
             level=AlertLevel.LEVEL_2,
             title="🧪🔴 [ТЕСТ] [2х] Ціль наближається (Товсте)",
             body=(
                 "Ціль прямує в бік Франківщини (Товсте)!\n"
-                "Очікується біля міста: 8–15 хв.\n"
+                f"Очікується біля міста: {window_str}.\n"
                 "Підготуйтеся перейти в безпечне місце.\n\n"
                 "⚠️ *Час підльоту є виключно довідковим розрахунком і може змінюватися "
                 "через маневри або зміну курсу. Не орієнтуйтеся на нього як на істину — переходьте в безпечні місця!*\n\n"
                 "🔔 *Це тестове сповіщення системи з увімкненим звуком.*"
             ),
             is_silent=False,
-            eta_window_str="8–15 хв",
+            eta_window_str=window_str,
         )
         await broadcast_alert(_bot, _subscribers, event)
 
