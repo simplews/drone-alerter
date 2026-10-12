@@ -116,19 +116,14 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
         )
         await broadcast_siren_event(_bot, _subscribers, title, body, is_silent=False)
     else:  # "drone"
-        t_start = (now_k + timedelta(minutes=8)).strftime("%H:%M")
-        t_end = (now_k + timedelta(minutes=15)).strftime("%H:%M")
-        window_str = f"{t_start}–{t_end} (за 8–15 хв)"
-        event = AlertEvent(
-            target_id="TEST-TARGET",
-            level=AlertLevel.LEVEL_2,
-            title="🧪 2х Наближення: Товсте",
-            body=f"⏱ Очікується біля міста: **{window_str}**",
-            is_silent=False,
-            eta_window_str=window_str,
-            source_links=[("monitoring_zaxid", "https://t.me/monitoring_zaxid/12345")],
+        title = "🧪 **[ТЕСТ] ТЕХНІЧНЕ СПОВІЩЕННЯ СИСТЕМИ**"
+        body = (
+            "Це тестова перевірка доставки звуку та налаштувань сповіщень.\n"
+            "⚠️ **Реальної загрози немає!**\n\n"
+            "Дякуємо, що ви з нами! Бажаємо тихого і безпечного дня! 🕊"
         )
-        await broadcast_alert(_bot, _subscribers, event)
+        await broadcast_siren_event(_bot, _subscribers, title, body, is_silent=False)
+
 
 
     return {

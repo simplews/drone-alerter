@@ -136,17 +136,14 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
     @dp.message(Command("test"))
     async def cmd_test(message: Message):
-        now_k = now_kyiv()
-        t_start = (now_k + timedelta(minutes=8)).strftime("%H:%M")
-        t_end = (now_k + timedelta(minutes=15)).strftime("%H:%M")
         test_alert = (
-            "🧪 **ТЕСТОВЕ СПОВІЩЕННЯ СИСТЕМИ (Перевірка звуку)**\n\n"
-            "🟠 **Наближення: Товсте**\n"
-            f"⏱ Очікується біля міста: **{t_start}–{t_end}** (за 8–15 хв)\n"
-            "🔗 Джерело: [test_channel #1](https://t.me/monitoring_zaxid)\n\n"
-            "ℹ️ [Як ми рахуємо](https://t.me/simpledronealert_bot?start=eta) • [Застереження](https://t.me/simpledronealert_bot?start=disclaimer)"
+            "🧪 **[ТЕСТ] ТЕХНІЧНЕ СПОВІЩЕННЯ СИСТЕМИ**\n\n"
+            "Це тестова перевірка доставки звуку та налаштувань сповіщень.\n"
+            "⚠️ **Реальної загрози немає!**\n\n"
+            "Дякуємо, що ви з нами! Бажаємо тихого і безпечного дня! 🕊"
         )
         await message.answer(test_alert, parse_mode="Markdown")
+
 
     @dp.message(Command("status"))
     async def cmd_status(message: Message):
