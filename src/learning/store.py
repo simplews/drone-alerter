@@ -2,7 +2,7 @@
 raw posts (with a limited retention time) and candidates for new names.
 
 By design, the code does NOT store where and when a target was shot down. The label
-``downed_en_route_if`` ("did not arrive") is enough for the model. An archive of shoot-down points is sensitive data.
+``downed_en_route`` ("did not arrive") is enough for the model. An archive of shoot-down points is sensitive data.
 """
 from __future__ import annotations
 
@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-OUTCOME_REACHED = "reached_if"           # arrived at IF (has an arrival time)
-OUTCOME_DOWNED = "downed_en_route_if"    # went toward IF but did not arrive
+OUTCOME_REACHED = "reached_target"      # arrived at the city (has an arrival time)
+OUTCOME_DOWNED = "downed_en_route"      # went toward the city but did not arrive
 OUTCOME_DIVERTED = "diverted"            # went to a different region
 OUTCOME_UNKNOWN = "unknown"
+_LEGACY_OUTCOMES = {"reached_if": "reached_target", "downed_en_route_if": "downed_en_route"}
 OUTCOMES = {OUTCOME_REACHED, OUTCOME_DOWNED, OUTCOME_DIVERTED, OUTCOME_UNKNOWN}
 
 _SCHEMA = """
@@ -107,6 +108,13 @@ class LearningStore:
         self.conn = sqlite3.connect(str(path))
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate_legacy_outcomes()
+
+    def _migrate_legacy_outcomes(self) -> None:
+        """Rename the old city-specific labels (``*_if``) in existing databases."""
+        with self.conn:
+            for old, new in _LEGACY_OUTCOMES.items():
+                self.conn.execute("UPDATE targets SET outcome=? WHERE outcome=?", (new, old))
 
     def close(self) -> None:
         self.conn.close()
@@ -155,9 +163,9 @@ class LearningStore:
         if outcome not in OUTCOMES:
             raise ValueError(f"Невідомий результат {outcome!r}. Допустимі: {sorted(OUTCOMES)}")
         if outcome == OUTCOME_REACHED and arrived_at is None:
-            raise ValueError("Для reached_if потрібен час прибуття (arrived_at)")
+            raise ValueError("Для reached_target потрібен час прибуття (arrived_at)")
         if outcome != OUTCOME_REACHED and arrived_at is not None:
-            raise ValueError("Час прибуття вказується лише для reached_if")
+            raise ValueError("Час прибуття вказується лише для reached_target")
         with self.conn:
             cur = self.conn.execute(
                 "UPDATE targets SET outcome=?, arrived_at_utc=?, labeled_at_utc=?, notes=? WHERE id=?",

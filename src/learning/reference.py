@@ -1,5 +1,7 @@
 """Versioned references: corridor points, ETA table, keywords.
 
+The first version comes from the city profile (``data/profiles``).
+
 Each update creates a new immutable file ``vNNNN.json``. The engine reads only the
 active version (the number in the file ``ACTIVE``). So you can review
 any change, compare it with the previous version and roll it back.
@@ -13,22 +15,14 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from src.profile import CityProfile, get_profile
+
 from .text import normalize
 
 STATUS_ACTIVE = "active"
 STATUS_PENDING = "pending"
 STATUS_REJECTED = "rejected"
 STATUS_ARCHIVED = "archived"
-
-# Words that look like point names but are not (regions, cardinal directions,
-# function words). The search for new names uses this list.
-DEFAULT_STOPWORDS = [
-    "україна", "увага", "оновлення", "upd", "захід", "схід", "північ", "південь",
-    "повітряні", "сили", "реактивна", "реактивний", "реактивні", "герань", "шахед",
-    "бпла", "іф", "франківськ", "івано-франківськ", "тернопіль", "хмельницький",
-    "волинь", "буковина", "поділля",
-]
-
 
 @dataclass
 class PointRef:
@@ -43,7 +37,7 @@ class PointRef:
     # seed | manual | physics | minmax+margin[+prior] | empirical_q
     eta_method: str = "none"
     n_obs: int = 0
-    # P(target goes to IF | target mentioned at this point), smoothed estimate.
+    # P(target goes to the city | target mentioned at this point), smoothed estimate.
     base_rate: float | None = None
     n_outcomes: int = 0
 
@@ -62,7 +56,7 @@ class ReferenceData:
 
     target_keywords: list[str] = field(default_factory=list)
     cancel_keywords: list[str] = field(default_factory=list)
-    stopwords: list[str] = field(default_factory=lambda: list(DEFAULT_STOPWORDS))
+    stopwords: list[str] = field(default_factory=list)
     changelog: list[str] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
 
@@ -195,45 +189,28 @@ class ActiveReferenceCache:
         return self._ref
 
 
-def seed_from_dictionary() -> ReferenceData:
-    """First version from src/nlp/dictionary.py (data from the PRD)."""
-    from src.nlp import dictionary as d
-
-    # Real flight distances to Ivano-Frankivsk along the corridor
-    known_distances = {
-        "khryplyn": 7.0,
-        "tysmenytsia": 12.0,
-        "tlumach": 25.0,
-        "chernelytsia": 54.0,
-        "tovste": 75.0,
-        "borshchiv": 95.0,
-        "skala_podilska": 110.0,
-        "kamianets_podilskyi": 135.0,
-        "dunaivtsi": 160.0,
-        "stara_ushytsia": 165.0,
-        "nova_ushytsia": 190.0,
-        "vendychany": 225.0,
-        "tomashpil": 250.0,
-        "pishchanka": 265.0,
-    }
-
-
+def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
+    """First version from the city profile (default: the profile that the settings select)."""
+    profile = profile or get_profile()
     points: dict[str, PointRef] = {}
-    for item in d.CORRIDOR_POINTS:
-        pid = item["id"]
-        eta = d.ETA_TABLE.get(pid)
-        points[pid] = PointRef(
-            id=pid,
+    for item in profile.points:
+        eta_min, eta_max = item.get("eta_min"), item.get("eta_max")
+        has_eta = eta_min is not None
+        points[item["id"]] = PointRef(
+            id=item["id"],
             names=list(item["names"]),
             level=item["level"],
-            distance_km=known_distances.get(pid),
-            eta_min=float(eta[0]) if eta else None,
-            eta_max=float(eta[1]) if eta else None,
-            eta_method="seed" if eta else "none",
+            distance_km=item.get("distance_km"),
+            eta_min=float(eta_min) if has_eta else None,
+            eta_max=float(eta_max) if has_eta else None,
+            eta_method="seed" if has_eta else "none",
         )
     return ReferenceData(
         points=points,
-        target_keywords=list(d.TARGET_KEYWORDS),
-        cancel_keywords=list(d.CANCEL_KEYWORDS),
-        changelog=["Початкова версія з src/nlp/dictionary.py (дані PRD, 8 епізодів 8–10.10.2026)"],
+        speed_kmh=list(profile.speed_kmh),
+        post_lag_min=list(profile.post_lag_min),
+        target_keywords=list(profile.target_keywords),
+        cancel_keywords=list(profile.cancel_keywords),
+        stopwords=list(profile.stopwords),
+        changelog=[f"Початкова версія з профілю {profile.id}"],
     )

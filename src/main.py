@@ -16,7 +16,7 @@ from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 from src.learning.store import LearningStore
 from src.nlp.normalizer import MessageNormalizer
@@ -46,7 +46,7 @@ class Application:
         self.repo = ReferenceRepository(settings.reference_dir)
         if not self.repo.versions():
             logger.info("Ініціалізація початкового довідника (seed v0001)...")
-            v1 = self.repo.save_new(seed_from_dictionary())
+            v1 = self.repo.save_new(seed_from_profile())
             self.repo.promote(v1.version)
 
         self.ref_cache = ActiveReferenceCache(self.repo)
@@ -61,7 +61,7 @@ class Application:
         self.siren_service: AerialAlertService | None = None
         if settings.siren_enabled:
             self.siren_service = AerialAlertService(
-                region=settings.siren_region,
+                region=settings.siren_region or None,
                 sources=settings.siren_sources,
                 poll_interval_seconds=settings.siren_poll_interval_seconds,
                 on_alert_start=self.on_siren_start,

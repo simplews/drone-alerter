@@ -23,7 +23,7 @@ from src.learning.reference import (
     ActiveReferenceCache,
     PointRef,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 from src.learning.store import (
     OUTCOME_DIVERTED,
@@ -69,7 +69,7 @@ class RepositoryTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_seed_promote_rollback(self):
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.assertEqual(self.repo.active().points["borshchiv"].eta_min, 11.0)
 
@@ -89,7 +89,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(self.repo.load(2).status, STATUS_REJECTED)
 
     def test_cannot_reject_active(self):
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         with self.assertRaises(ValueError):
             self.repo.reject(v1.version)
@@ -137,7 +137,7 @@ class PipelineTests(unittest.TestCase):
         root = Path(self.tmp.name)
         self.repo = ReferenceRepository(root / "ref")
         self.store = LearningStore(root / "learning.db")
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.now = T0 + timedelta(days=30)
 

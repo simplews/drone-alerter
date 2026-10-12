@@ -12,7 +12,7 @@ from src.engine.simulation import EvaluationMetrics
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 
 
@@ -60,7 +60,7 @@ def test_parse_posts_and_replay(tmp_path: Path):
 
     # Replay
     repo = ReferenceRepository(tmp_path / "reference")
-    v1 = repo.save_new(seed_from_dictionary())
+    v1 = repo.save_new(seed_from_profile())
     repo.promote(v1.version)
     cache = ActiveReferenceCache(repo)
 

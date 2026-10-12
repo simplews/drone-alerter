@@ -9,7 +9,7 @@ from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 from src.nlp.normalizer import MessageNormalizer
 
@@ -18,7 +18,7 @@ class TestHistoricalReplayEpisodes(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = ReferenceRepository(Path(self.tmp.name) / "ref")
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.cache = ActiveReferenceCache(self.repo)
         self.normalizer = MessageNormalizer(self.cache)

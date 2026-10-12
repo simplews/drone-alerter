@@ -5,7 +5,7 @@ Examples:
     python -m src.learning.cli status
     python -m src.learning.cli import-episodes data/episodes.csv
     python -m src.learning.cli unlabeled
-    python -m src.learning.cli label T-2026-10-10-01 reached_if --arrived-at 2026-10-10T19:55:00+00:00
+    python -m src.learning.cli label T-2026-10-10-01 reached_target --arrived-at 2026-10-10T19:55:00+00:00
     python -m src.learning.cli discover-aliases
     python -m src.learning.cli aliases
     python -m src.learning.cli approve-alias "скалат" --new-point skalat --level 2
@@ -25,7 +25,7 @@ from datetime import datetime
 
 from .aliases import discover_aliases
 from .pipeline import LearningConfig, diff, retrain
-from .reference import ReferenceRepository, seed_from_dictionary
+from .reference import ReferenceRepository, seed_from_profile
 from .store import LearningStore, parse_utc
 
 DEFAULT_REF_DIR = os.environ.get("REFERENCE_DIR", "data/reference")
@@ -40,7 +40,7 @@ def cmd_seed(args, repo, store):
     if repo.versions():
         print("Версії вже існують, seed пропущено.")
         return
-    ref = repo.save_new(seed_from_dictionary())
+    ref = repo.save_new(seed_from_profile())
     repo.promote(ref.version)
     print(f"Створено й активовано v{ref.version}.")
 
@@ -198,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("unlabeled").set_defaults(func=cmd_unlabeled)
     s = sub.add_parser("label")
     s.add_argument("target_id")
-    s.add_argument("outcome", choices=["reached_if", "downed_en_route_if", "diverted", "unknown"])
+    s.add_argument("outcome", choices=["reached_target", "downed_en_route", "diverted", "unknown"])
     s.add_argument("--arrived-at")
     s.add_argument("--notes")
     s.set_defaults(func=cmd_label)

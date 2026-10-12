@@ -68,8 +68,8 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
                 log.append(f"Назва «{norm}» -> {pid}")
 
     # 2. Distances and speed of the jet drones.
-    from .reference import seed_from_dictionary
-    seed_points = seed_from_dictionary().points
+    from .reference import seed_from_profile
+    seed_points = seed_from_profile().points
     for pid, point in cand.points.items():
         if point.distance_km is None and pid in seed_points:
             point.distance_km = seed_points[pid].distance_km
@@ -102,7 +102,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
         if durations.get(pid):
             point.n_obs = len(durations[pid])
 
-    # 4. Base rates P(IF | point).
+    # 4. Base rates P(city | point).
     for pid, (rate, n) in base_rates(outcomes, cfg).items():
         if pid not in cand.points:
             continue

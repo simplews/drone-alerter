@@ -33,7 +33,7 @@ class CalibrationConfig:
     margin_min: float = 1.0
     max_narrowing_per_update_min: float = 6.0
     min_speed_obs: int = 4
-    # Beta(a, b) prior for P(IF | point). (1, 1) is uniform.
+    # Beta(a, b) prior for P(city | point). (1, 1) is uniform.
     base_rate_prior: tuple[float, float] = (1.0, 1.0)
 
 
@@ -118,7 +118,7 @@ def calibrate_point(point: PointRef, durations: list[float], speed_kmh: list[flo
 
 
 def base_rates(rows: list[OutcomeRow], cfg: CalibrationConfig) -> dict[str, tuple[float, int]]:
-    """P(target goes to IF | point mention). Positive: the target arrived or was shot down on the way to IF.
+    """P(target goes to the city | point mention). Positive: the target arrived or was shot down on the way to the city.
     Negative: the target went to a different region. The code ignores unknown."""
     pos: dict[str, int] = defaultdict(int)
     total: dict[str, int] = defaultdict(int)

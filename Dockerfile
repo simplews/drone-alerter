@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
 COPY data/reference/ ./data/reference/
+COPY data/profiles/ ./data/profiles/
 
 RUN useradd --system --create-home app && mkdir -p /app/data && chown -R app /app
 USER app

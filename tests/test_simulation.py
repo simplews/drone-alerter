@@ -9,7 +9,7 @@ from src.engine.simulation import ShadowModeSimulator, SimulationEpisode
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 
 T0 = datetime(2026, 10, 10, 21, 28, tzinfo=UTC)
@@ -19,7 +19,7 @@ class TestShadowModeSimulator(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = ReferenceRepository(Path(self.tmp.name) / "ref")
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.cache = ActiveReferenceCache(self.repo)
         self.simulator = ShadowModeSimulator(self.cache)
