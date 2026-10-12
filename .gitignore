@@ -26,6 +26,8 @@ venv/
 .venv/
 env/
 .env
+.env.*
+!.env.example
 
 # IDEs
 .idea/
@@ -38,6 +40,13 @@ env/
 *.db
 sessions/
 *.session
+*.session-journal
+*.pem
+*.key
+data/subscribers*
+data/*.db
+.pytest_cache/
+.ruff_cache/
 data/attacks_*.json
 data/historical_*.json
 
