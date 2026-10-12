@@ -82,7 +82,8 @@ class TestHistoricalReplayEpisodes(unittest.TestCase):
         alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=t_0316)
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_3A)
-        self.assertIn("[2х]", alerts1[0].title)
+        self.assertIn("2х", alerts1[0].title)
+
 
         # 03:17 @monitoring_zaxid: підтвердження Тлумач
         t_0317 = datetime(2026, 10, 9, 3, 17, tzinfo=UTC)

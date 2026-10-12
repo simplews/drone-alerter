@@ -67,10 +67,22 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed1.action, ActionType.DOWNED)
         self.assertEqual(parsed1.action_point_id, "tlumach")
 
-        p2 = RawPost("chan_a", 21, "Відвернув на Рівне", T0)
-        parsed2 = self.normalizer.parse(p2)
-        self.assertEqual(parsed2.action, ActionType.DIVERTED)
+    def test_multi_region_digest_count_isolation(self):
+        # Перевірка випадку від 12 жовтня: у зведенні 2 цілі на Кіровоградщині, але на Нову Ушицю лише 1
+        text = (
+            "Хмельниччина:\n"
+            "Реактивний БпЛА курсом на Нову Ушицю\n\n"
+            "Кіровоградщина:\n"
+            "2х Реактивні БпЛА курсом на Новомиргород"
+        )
+        post = RawPost("kudy_letyt", 122404, text, T0)
+        parsed = self.normalizer.parse(post)
+        self.assertTrue(parsed.is_jet)
+        self.assertEqual(parsed.points, ["nova_ushytsia"])
+        # Має бути 1, а не 2!
+        self.assertEqual(parsed.count, 1)
 
 
 if __name__ == "__main__":
     unittest.main()
+

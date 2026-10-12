@@ -88,13 +88,38 @@ class MessageNormalizer:
         elif _CLEAR_RE.search(norm_text):
             action = ActionType.CLEAR
 
-        # 5. Підрахунок кількості цілей
+        # 5. Підрахунок кількості цілей (локально для знайдених пунктів, щоб уникнути хибних спрацьовувань зі зведених повідомлень)
         count = 1
-        for pattern, extractor in _COUNT_PATTERNS:
-            m = pattern.search(text)
-            if m:
-                count = extractor(m)
-                break
+        if points_found and matched_spans:
+            # Визначаємо локальний контекст навколо знайдених пунктів
+            # Знаходимо межі абзаців або рядків, у яких згадуються знайдені пункти
+            first_span_start = min(s for s, e in matched_spans)
+            last_span_end = max(e for s, e in matched_spans)
+            
+            # Шукаємо межі абзацу (\n\n або \n)
+            prev_nl = text.rfind("\n\n", 0, first_span_start)
+            if prev_nl == -1:
+                # Спробуємо одинарний перенос рядка, якщо це список областей
+                prev_nl = text.rfind("\n", 0, first_span_start)
+            start_ctx = 0 if prev_nl == -1 else prev_nl + 1
+
+            next_nl = text.find("\n\n", last_span_end)
+            if next_nl == -1:
+                next_nl = text.find("\n", last_span_end)
+            end_ctx = len(text) if next_nl == -1 else next_nl
+
+            local_text = text[start_ctx:end_ctx]
+            for pattern, extractor in _COUNT_PATTERNS:
+                m = pattern.search(local_text)
+                if m:
+                    count = extractor(m)
+                    break
+        else:
+            for pattern, extractor in _COUNT_PATTERNS:
+                m = pattern.search(text)
+                if m:
+                    count = extractor(m)
+                    break
 
         # Якщо є підтвердження реактивної цілі — продовжуємо контекстне вікно каналу
         is_jet = explicit_jet or (inherited_jet and bool(points_found or action != ActionType.NONE))
@@ -112,3 +137,4 @@ class MessageNormalizer:
             action_point_id=action_point,
             raw_text=text,
         )
+

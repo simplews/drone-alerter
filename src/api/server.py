@@ -122,19 +122,14 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
         event = AlertEvent(
             target_id="TEST-TARGET",
             level=AlertLevel.LEVEL_2,
-            title="🧪🔴 [ТЕСТ] [2х] Ціль наближається (Товсте)",
-            body=(
-                "Ціль прямує в бік Франківщини (Товсте)!\n"
-                f"Очікується біля міста: {window_str}.\n"
-                "Підготуйтеся перейти в безпечне місце.\n\n"
-                "⚠️ *Час підльоту є виключно довідковим розрахунком і може змінюватися "
-                "через маневри або зміну курсу. Не орієнтуйтеся на нього як на істину — переходьте в безпечні місця!*\n\n"
-                "🔔 *Це тестове сповіщення системи з увімкненим звуком.*"
-            ),
+            title="🧪 2х Наближення: Товсте",
+            body=f"⏱ Очікується біля міста: **{window_str}**",
             is_silent=False,
             eta_window_str=window_str,
+            source_links=[("monitoring_zaxid", "https://t.me/monitoring_zaxid/12345")],
         )
         await broadcast_alert(_bot, _subscribers, event)
+
 
     return {
         "status": "ok",

@@ -209,10 +209,11 @@ class TargetTracker:
                 is_update = True
 
             if should_alert or is_update:
-                alert = self._build_alert(target, point, w_str, is_update=is_update)
+                alert = self._build_alert(target, point, w_str, post=post, is_update=is_update)
                 alerts.append(alert)
                 if should_alert:
                     self._target_last_alerted_level[target.id] = target.level
+
 
 
         self._cleanup_expired(now)
@@ -246,6 +247,10 @@ class TargetTracker:
         if target.last_point_id in ref.points and ref.points[target.last_point_id].names:
             point_name = ref.points[target.last_point_id].names[0].capitalize()
 
+        source_links: list[tuple[str, str]] = []
+        if post and post.channel and post.message_id:
+            source_links.append((post.channel, f"https://t.me/{post.channel}/{post.message_id}"))
+
         if parsed.action in (ActionType.DOWNED, ActionType.LOST):
             if target.target_count > 1:
                 # Зменшуємо лічильник цілей у групі
@@ -261,6 +266,7 @@ class TargetTracker:
                     title="Оновлення: часткове ураження цілі",
                     body=body,
                     is_silent=False,
+                    source_links=source_links,
                 ))
             else:
                 target.status = TargetStatus.PROBABLY_DOWNED
@@ -275,6 +281,7 @@ class TargetTracker:
                     title="Ціль імовірно збита / втрачена",
                     body=body,
                     is_silent=True,
+                    source_links=source_links,
                 ))
 
         elif parsed.action == ActionType.DIVERTED:
@@ -289,6 +296,7 @@ class TargetTracker:
                 title="Ціль змінила курс",
                 body=body,
                 is_silent=True,
+                source_links=source_links,
             ))
 
         return alerts
@@ -298,55 +306,39 @@ class TargetTracker:
         target: Target,
         point,
         window_str: str,
+        post: RawPost | None = None,
         is_update: bool = False,
     ) -> AlertEvent:
         point_display = point.names[0].capitalize() if point.names else target.last_point_id
-        count_prefix = f"[{target.target_count}х] " if target.target_count > 1 else ""
+        count_prefix = f"{target.target_count}х " if target.target_count > 1 else ""
 
-        disclaimer = (
-            "\n\n⚠️ *Час підльоту є виключно довідковим розрахунком і може змінюватися "
-            "через маневри або зміну курсу. Не орієнтуйтеся на нього як на істину — переходьте в безпечні місця!*"
-        )
+        # Збираємо посилання на першоджерела
+        source_links: list[tuple[str, str]] = []
+        if post and post.channel and post.message_id:
+            source_links.append((post.channel, f"https://t.me/{post.channel}/{post.message_id}"))
+        elif target.message_ids:
+            for ch, mid in target.message_ids[-2:]:
+                source_links.append((ch, f"https://t.me/{ch}/{mid}"))
 
         if target.level == AlertLevel.LEVEL_1:
-            title = f"🟡 {count_prefix}Ціль на коридорі ({point_display})"
-            body = (
-                f"Ціль зафіксовано на підходах до коридору ({point_display}). "
-                f"Можливий рух у бік Франківщини.\n"
-                f"Розрахункове вікно біля міста: {window_str}."
-                f"{disclaimer}"
-            )
+            title = f"🟡 {count_prefix}Потенційна загроза: {point_display}"
+            body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = True
 
         elif target.level == AlertLevel.LEVEL_2:
-            title = f"🟠 {count_prefix}Ціль наближається ({point_display})"
-            body = (
-                f"Ціль прямує в бік Франківщини ({point_display})!\n"
-                f"Очікується біля міста: {window_str}.\n"
-                f"Підготуйтеся перейти в безпечне місце."
-                f"{disclaimer}"
-            )
+            title = f"🟠 {count_prefix}Наближення: {point_display}"
+            body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = False
 
         elif target.level == AlertLevel.LEVEL_3A:
-            title = f"🔴 {count_prefix}УВАГА! Підліт до міста ({point_display})"
-            body = (
-                f"Ціль підлітає до Івано-Франківська через {point_display}!\n"
-                f"Час до міста: {window_str}.\n"
-                f"Негайно перебувайте в укриттях!"
-                f"{disclaimer}"
-            )
+            title = f"🔴 {count_prefix}Небезпека (підліт): {point_display}"
+            body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = False
 
         else:  # LEVEL_3B
-            title = f"🔴 {count_prefix}ЦІЛЬ БІЛЯ / НАД МІСТОМ ({point_display})"
-            body = (
-                f"Ціль безпосередньо біля або над містом зараз ({point_display})!\n"
-                f"Негайно відійдіть від вікон та перебувайте в безпечних місцях!"
-                f"{disclaimer}"
-            )
+            title = f"🔴 {count_prefix}Небезпека біля / над містом: {point_display}"
+            body = "❗️ Ціль безпосередньо біля або над містом зараз! Перебувайте в безпечних місцях."
             is_silent = False
-
 
         return AlertEvent(
             target_id=target.id,
@@ -356,7 +348,9 @@ class TargetTracker:
             is_silent=is_silent,
             eta_window_str=window_str,
             is_update=is_update,
+            source_links=source_links,
         )
+
 
     @staticmethod
     def _level_rank(level: AlertLevel) -> int:

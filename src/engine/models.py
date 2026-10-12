@@ -77,3 +77,5 @@ class AlertEvent:
     is_silent: bool
     eta_window_str: str = ""
     is_update: bool = False     # чи це редагування попереднього повідомлення
+    source_links: list[tuple[str, str]] = field(default_factory=list)  # [(channel, url), ...]
+
