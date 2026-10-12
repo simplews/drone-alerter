@@ -1,6 +1,6 @@
-"""Командний рядок для щоденної роботи з навчанням.
+"""Command line for the daily learning work.
 
-Приклади:
+Examples:
     python -m src.learning.cli seed
     python -m src.learning.cli status
     python -m src.learning.cli import-episodes data/episodes.csv
@@ -57,7 +57,7 @@ def cmd_status(args, repo, store):
 
 def cmd_import(args, repo, store):
     """CSV: target_id,point_id,channel,posted_at_utc,outcome,arrived_at_utc
-    outcome і arrived_at_utc достатньо вказати в одному рядку цілі."""
+    Put outcome and arrived_at_utc in one row of the target only."""
     labels: dict[str, tuple[str, str]] = {}
     with open(args.csv, encoding="utf-8") as fh:
         for i, row in enumerate(csv.DictReader(fh), start=1):

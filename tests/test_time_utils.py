@@ -1,4 +1,4 @@
-"""Тести для підтримки київського часового поясу (Europe/Kyiv) та переходу на літній/зимовий час."""
+"""Tests for the Kyiv time zone (Europe/Kyiv) and the change to summer/winter time."""
 import unittest
 from datetime import UTC, datetime
 
@@ -9,7 +9,7 @@ from src.utils.time import KYIV_TZ, format_kyiv_time, now_kyiv, to_kyiv_time
 
 class TestKyivTimezone(unittest.TestCase):
     def test_summer_daylight_saving_utc_plus_3(self):
-        # 10 липня (літній час, EEST = UTC+3)
+        # 10 July (summer time, EEST = UTC+3)
         summer_utc = datetime(2026, 7, 10, 21, 30, tzinfo=UTC)
         kyiv_time = to_kyiv_time(summer_utc)
         self.assertEqual(kyiv_time.tzinfo, KYIV_TZ)
@@ -18,7 +18,7 @@ class TestKyivTimezone(unittest.TestCase):
         self.assertEqual(format_kyiv_time(summer_utc), "00:30")
 
     def test_winter_standard_time_utc_plus_2(self):
-        # 10 січня (зимовий час, EET = UTC+2)
+        # 10 January (winter time, EET = UTC+2)
         winter_utc = datetime(2026, 1, 10, 21, 30, tzinfo=UTC)
         kyiv_time = to_kyiv_time(winter_utc)
         self.assertEqual(kyiv_time.tzinfo, KYIV_TZ)
@@ -36,7 +36,7 @@ class TestKyivTimezone(unittest.TestCase):
         self.assertEqual(now.tzinfo, KYIV_TZ)
 
     def test_eta_window_formats_in_kyiv_time(self):
-        # Пост о 21:00 UTC (влітку це 00:00 за Києвом наступного дня)
+        # A post at 21:00 UTC (in summer this is 00:00 Kyiv time of the next day)
         post_utc = datetime(2026, 7, 10, 21, 0, tzinfo=UTC)
         ref = ReferenceData(version=1, status="active", speed_kmh=[400, 480], post_lag_min=[0.5, 1.5])
         point = PointRef(id="kam", names=["камʼянець"], level=2, eta_min=20.0, eta_max=25.0)
@@ -48,8 +48,8 @@ class TestKyivTimezone(unittest.TestCase):
             current_time_utc=post_utc,
         )
 
-        # 21:00 + 20 хв = 21:20 UTC -> за Києвом має бути 00:20!
-        # 21:00 + 25 хв = 21:25 UTC -> за Києвом має бути 00:25!
+        # 21:00 + 20 min = 21:20 UTC -> Kyiv time must be 00:20!
+        # 21:00 + 25 min = 21:25 UTC -> Kyiv time must be 00:25!
         self.assertIn("00:20–00:25", w_str)
         self.assertNotIn("21:20", w_str)
 

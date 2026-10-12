@@ -1,7 +1,7 @@
-"""Модуль симуляції та оцінки метрик у тіньовому режимі (Shadow Mode Evaluation).
+"""Module for simulation and metric evaluation in shadow mode (Shadow Mode Evaluation).
 
-Дозволяє запустити пакетну перевірку сценаріїв та розрахувати показники
-відповідності критеріям Go/No-Go із розділу 7 PRD v1.1.
+It runs a batch check of scenarios. It calculates how well the results meet
+the Go/No-Go criteria from section 7 of PRD v1.1.
 """
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ class SimulationEpisode:
     episode_id: str
     description: str
     posts: list[RawPost]
-    actual_arrival_utc: datetime | None = None  # фактичний час прибуття (якщо долетіла)
-    official_alert_utc: datetime | None = None  # час оголошення офіційної небезпеки по району
-    manual_channel_mention_utc: datetime | None = None  # перша згадка ІФ у моніторингах
+    actual_arrival_utc: datetime | None = None  # actual arrival time (if the target arrived)
+    official_alert_utc: datetime | None = None  # time when the official danger was declared for the district
+    manual_channel_mention_utc: datetime | None = None  # first mention of IF in the monitoring channels
 
 
 @dataclass
@@ -32,22 +32,22 @@ class EvaluationMetrics:
     level_2_alerts_count: int = 0
     level_3_alerts_count: int = 0
     
-    # Метрики точності ETA
+    # ETA accuracy metrics
     eta_within_range_count: int = 0
     eta_evaluable_count: int = 0
     eta_coverage_percent: float = 0.0
     
-    # Метрики випередження (Lead Time)
+    # Lead time metrics
     lead_time_over_official_minutes: list[float] = field(default_factory=list)
     lead_time_over_manual_minutes: list[float] = field(default_factory=list)
     
-    # Безпекові метрики
+    # Safety metrics
     false_level_2_count: int = 0
     false_level_2_rate_percent: float = 0.0
     false_closures_count: int = 0
     missed_targets_count: int = 0
     
-    # Go/No-Go статус
+    # Go/No-Go status
     go_no_go_checklist: dict[str, bool] = field(default_factory=dict)
 
 
@@ -77,7 +77,7 @@ class ShadowModeSimulator:
             targets = list(tracker._active_targets.values())
             metrics.total_targets += len(targets)
 
-            # Перевірка Lead Time
+            # Check the lead time
             if first_level_2_time:
                 metrics.level_2_alerts_count += 1
                 if episode.official_alert_utc:
@@ -87,7 +87,7 @@ class ShadowModeSimulator:
                     lead_manual = (episode.manual_channel_mention_utc - first_level_2_time).total_seconds() / 60.0
                     metrics.lead_time_over_manual_minutes.append(lead_manual)
 
-            # Перевірка покриття ETA
+            # Check the ETA coverage
             if episode.actual_arrival_utc and targets:
                 target = targets[0]
                 metrics.eta_evaluable_count += 1
@@ -104,13 +104,13 @@ class ShadowModeSimulator:
                 "targets_count": len(targets),
             })
 
-        # Розрахунок відсотків
+        # Calculate the percentages
         if metrics.eta_evaluable_count > 0:
             metrics.eta_coverage_percent = round(
                 (metrics.eta_within_range_count / metrics.eta_evaluable_count) * 100.0, 1
             )
         
-        # Критерії Go/No-Go з PRD розділ 7
+        # Go/No-Go criteria from PRD section 7
         med_lead_official = (
             sorted(metrics.lead_time_over_official_minutes)[len(metrics.lead_time_over_official_minutes) // 2]
             if metrics.lead_time_over_official_minutes else 0.0

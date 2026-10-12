@@ -1,4 +1,4 @@
-"""Нормалізація та парсинг тексту повідомлень моніторингових каналів."""
+"""Normalization and parsing of the message text from the monitoring channels."""
 from __future__ import annotations
 
 import re
@@ -8,7 +8,7 @@ from src.engine.models import ActionType, ParsedMessage, RawPost
 from src.learning.reference import ActiveReferenceCache, ReferenceData
 from src.learning.text import normalize
 
-# Патерни кількості цілей
+# Patterns for the number of targets
 _COUNT_PATTERNS = [
     (re.compile(r"(?i)\b(\d+)\s*(?:х|x)\b"), lambda m: int(m.group(1))),
     (re.compile(r"(?i)\b(\d+)\s+(?:реактивн|бпла|шахед|геран)"), lambda m: int(m.group(1))),
@@ -19,7 +19,7 @@ _COUNT_PATTERNS = [
     (re.compile(r"(?i)\bодна\s+реактивн"), lambda _: 1),
 ]
 
-# Патерни дій
+# Patterns for actions
 _DOWNED_RE = re.compile(r"(?i)\b(збит[оаіи]|збили|уражен[оа]|мінус\s+ціль|знищен[оа])\b")
 _EXPLOSION_RE = re.compile(r"(?i)\b(вибух|вибухи|гучно|чутно\s+вибух)\b")
 _LOST_RE = re.compile(r"(?i)\b(локаційно\s+втрачен[оа]|втрачено\s+з\s+радарів)\b")
@@ -28,12 +28,12 @@ _CLEAR_RE = re.compile(r"(?i)\b(відбій|чисто|дорозвідка)\b"
 
 
 class MessageNormalizer:
-    """Аналізатор повідомлень із підтримкою контекстного успадкування типу цілі."""
+    """Message analyzer that can inherit the target type from the context."""
 
     def __init__(self, ref_cache: ActiveReferenceCache, context_window_minutes: float = 20.0):
         self._ref_cache = ref_cache
         self._context_window = timedelta(minutes=context_window_minutes)
-        # Останній час згадки реактивної цілі для кожного каналу: channel -> datetime
+        # Last time of a jet target mention for each channel: channel -> datetime
         self._channel_jet_context: dict[str, datetime] = {}
 
     def _get_ref(self) -> ReferenceData:
@@ -44,30 +44,30 @@ class MessageNormalizer:
         norm_text = normalize(text)
         ref = self._get_ref()
 
-        # 1. Перевірка явних ключових слів реактивного БпЛА
+        # 1. Check for explicit jet drone keywords
         explicit_jet = any(kw.lower() in norm_text for kw in ref.target_keywords)
 
-        # 2. Перевірка контекстного успадкування
+        # 2. Check for context inheritance
         now = post.posted_at_utc
         last_jet_time = self._channel_jet_context.get(post.channel)
         inherited_jet = False
         if last_jet_time and (now - last_jet_time) <= self._context_window:
             inherited_jet = True
 
-        # 3. Виявлення населених пунктів коридору
+        # 3. Detect settlements in the corridor
         points_found: list[str] = []
         alias_index = ref.alias_index()
 
-        # Сортуємо аліаси від довших до коротших, щоб "нова ушиця" матчилась перед "ушиця"
+        # Sort the aliases from longer to shorter, so "нова ушиця" matches before "ушиця"
         sorted_aliases = sorted(alias_index.keys(), key=len, reverse=True)
         matched_spans: list[tuple[int, int]] = []
 
         for alias in sorted_aliases:
-            # Шукаємо аліас із межами слів або на початку/кінці рядка
+            # Look for the alias with word boundaries, or at the start/end of the line
             pattern = re.compile(rf"(?i)(?:\b|^){re.escape(alias)}(?:\b|$)")
             for match in pattern.finditer(norm_text):
                 start, end = match.span()
-                # Перевіряємо, чи цей фрагмент уже не покритий довшим аліасом
+                # Check that a longer alias does not already cover this fragment
                 overlap = any(s <= start < e or s < end <= e for s, e in matched_spans)
                 if not overlap:
                     matched_spans.append((start, end))
@@ -75,7 +75,7 @@ class MessageNormalizer:
                     if point_id not in points_found:
                         points_found.append(point_id)
 
-        # 4. Виявлення дій
+        # 4. Detect actions
         action = ActionType.NONE
         if _DOWNED_RE.search(norm_text):
             action = ActionType.DOWNED
@@ -88,20 +88,20 @@ class MessageNormalizer:
         elif _CLEAR_RE.search(norm_text):
             action = ActionType.CLEAR
 
-        # 5. Підрахунок кількості цілей (локально для знайдених пунктів, щоб уникнути хибних спрацьовувань зі зведених повідомлень)
+        # 5. Count the targets (locally for the found points, to avoid false matches from summary messages)
         count = 1
         explicit_count = False
         if points_found and matched_spans:
 
-            # Визначаємо локальний контекст навколо знайдених пунктів
-            # Знаходимо межі абзаців або рядків, у яких згадуються знайдені пункти
+            # Find the local context around the found points
+            # Find the paragraph or line boundaries around the found points
             first_span_start = min(s for s, e in matched_spans)
             last_span_end = max(e for s, e in matched_spans)
             
-            # Шукаємо межі абзацу (\n\n або \n)
+            # Look for the paragraph boundary (\n\n or \n)
             prev_nl = text.rfind("\n\n", 0, first_span_start)
             if prev_nl == -1:
-                # Спробуємо одинарний перенос рядка, якщо це список областей
+                # Try a single line break if this is a list of regions
                 prev_nl = text.rfind("\n", 0, first_span_start)
             start_ctx = 0 if prev_nl == -1 else prev_nl + 1
 
@@ -125,12 +125,12 @@ class MessageNormalizer:
                     explicit_count = True
                     break
 
-        # Якщо є підтвердження реактивної цілі — продовжуємо контекстне вікно каналу
+        # If a jet target is confirmed, extend the context window of the channel
         is_jet = explicit_jet or (inherited_jet and bool(points_found or action != ActionType.NONE))
         if is_jet:
             self._channel_jet_context[post.channel] = now
 
-        # Прив'язка дії до першого знайденого пункту
+        # Bind the action to the first found point
         action_point = points_found[0] if points_found else None
 
         return ParsedMessage(

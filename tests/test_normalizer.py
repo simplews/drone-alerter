@@ -1,4 +1,4 @@
-"""Тести для парсера повідомлень та нормалізатора (MessageNormalizer)."""
+"""Tests for the message parser and the normalizer (MessageNormalizer)."""
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -35,20 +35,20 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed.count, 1)
 
     def test_contextual_type_inheritance(self):
-        # Пост 1: канал пише про реактивну ціль
+        # Post 1: the channel writes about a jet target
         p1 = RawPost("chan_a", 1, "Реактивна герань на Стару Ушицю", T0)
         parsed1 = self.normalizer.parse(p1)
         self.assertTrue(parsed1.is_jet)
         self.assertEqual(parsed1.points, ["stara_ushytsia"])
 
-        # Пост 2 через 3 хв: той самий канал пише просто назву міста
+        # Post 2, 3 minutes later: the same channel writes only a city name
         p2 = RawPost("chan_a", 2, "Камʼянець-Подільський", T0 + timedelta(minutes=3))
         parsed2 = self.normalizer.parse(p2)
-        # Тип має успадкуватись з контексту!
+        # The type must be inherited from the context!
         self.assertTrue(parsed2.is_jet)
         self.assertEqual(parsed2.points, ["kamianets_podilskyi"])
 
-        # Пост 3 через 15 хв: наступний пункт
+        # Post 3, 15 minutes later: the next point
         p3 = RawPost("chan_a", 3, "Товсте", T0 + timedelta(minutes=15))
         parsed3 = self.normalizer.parse(p3)
         self.assertTrue(parsed3.is_jet)
@@ -68,7 +68,7 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed1.action_point_id, "tlumach")
 
     def test_multi_region_digest_count_isolation(self):
-        # Перевірка випадку від 12 жовтня: у зведенні 2 цілі на Кіровоградщині, але на Нову Ушицю лише 1
+        # Check the case of 12 October: the summary has 2 targets over Kirovohrad region, but only 1 for Nova Ushytsia
         text = (
             "Хмельниччина:\n"
             "Реактивний БпЛА курсом на Нову Ушицю\n\n"
@@ -79,7 +79,7 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed = self.normalizer.parse(post)
         self.assertTrue(parsed.is_jet)
         self.assertEqual(parsed.points, ["nova_ushytsia"])
-        # Має бути 1, а не 2!
+        # It must be 1, not 2!
         self.assertEqual(parsed.count, 1)
 
 

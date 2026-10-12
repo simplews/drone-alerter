@@ -1,4 +1,4 @@
-"""Розрахунок гібридного ETA та визначення рівнів небезпеки."""
+"""Hybrid ETA calculation and danger level selection."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -15,33 +15,33 @@ def calculate_eta(
     post_time_utc: datetime,
     current_time_utc: datetime,
 ) -> tuple[float, float, datetime, datetime, str]:
-    """Обчислює мінімальний і максимальний час підльоту (у хвилинах) та часове вікно.
+    """Calculate the minimum and maximum approach time (in minutes) and the time window.
 
-    Повертає:
+    Returns:
         (rem_min_minutes, rem_max_minutes, window_start_utc, window_end_utc, window_str)
     """
     elapsed_minutes = max(0.0, (current_time_utc - post_time_utc).total_seconds() / 60.0)
 
-    # 1. Визначаємо базовий діапазон підльоту від пункту
+    # 1. Find the base approach range from the point
     if point.eta_min is not None and point.eta_max is not None:
         base_min = point.eta_min
         base_max = point.eta_max
     elif point.distance_km:
         base_min, base_max = physics_interval(point.distance_km, ref.speed_kmh, ref.post_lag_min)
     else:
-        # Безпечний дефолт
+        # Safe default
         base_min, base_max = 5.0, 15.0
 
-    # 2. Розрахунок абсолютного часового вікна біля міста
+    # 2. Calculate the absolute time window near the city
     window_start = post_time_utc + timedelta(minutes=base_min)
     window_end = post_time_utc + timedelta(minutes=base_max)
 
-    # 3. Залишковий час від поточного моменту
+    # 3. Calculate the time that remains from now
     rem_min = max(0.0, base_min - elapsed_minutes)
     rem_max = max(0.0, base_max - elapsed_minutes)
 
-    # 4. Форматування для користувача за київським часом (Europe/Kyiv)
-    # Формат: "22:50–22:58 (за 25–33 хв)"
+    # 4. Format for the user in Kyiv time (Europe/Kyiv)
+    # Format: "22:50–22:58 (за 25–33 хв)"
     start_str = format_kyiv_time(window_start)
     end_str = format_kyiv_time(window_end)
     min_int = round(rem_min)
@@ -56,7 +56,7 @@ def calculate_eta(
 
 
 def determine_level(point_id: str, point_level: int) -> AlertLevel:
-    """Визначає рівень сповіщення на основі пункту та його рівня в довіднику."""
+    """Select the alert level from the point and its level in the reference."""
     if point_id in ("tysmenytsia", "khryplyn"):
         return AlertLevel.LEVEL_3B
     if point_id in ("chernelytsia", "tlumach") or point_level == 3:

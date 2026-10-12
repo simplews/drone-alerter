@@ -1,4 +1,4 @@
-"""Тести для FastAPI-ендпоінтів моніторингу та здоров'я (/health, /targets)."""
+"""Tests for the FastAPI monitoring and health endpoints (/health, /targets)."""
 import tempfile
 import unittest
 from pathlib import Path

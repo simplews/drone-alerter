@@ -1,4 +1,4 @@
-"""Доменні моделі даних для обробки повідомлень, стану цілей та сповіщень."""
+"""Domain data models for message processing, target state and alerts."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,19 +8,19 @@ from enum import Enum
 
 class ActionType(str, Enum):
     NONE = "none"
-    DOWNED = "downed"          # збито, уражено, мінус
-    EXPLOSION = "explosion"    # вибух, чутно вибухи
-    LOST = "lost"              # локаційно втрачено
-    DIVERTED = "diverted"      # відворот на північ/Рівне/Волинь
-    CLEAR = "clear"            # відбій
+    DOWNED = "downed"          # shot down, hit, minus
+    EXPLOSION = "explosion"    # explosion, explosions heard
+    LOST = "lost"              # radar contact lost
+    DIVERTED = "diverted"      # turn north / Rivne / Volyn
+    CLEAR = "clear"            # all clear
 
 
 class AlertLevel(str, Enum):
-    LEVEL_1 = "level_1"        # Увага (Піщанка, Вендичани, Нова/Стара Ушиця, Дунаївці) - silent push
-    LEVEL_2 = "level_2"        # Наближається (Камʼянець, Скала, Борщів, Товсте) - loud push
-    LEVEL_3A = "level_3a"      # Підліт (Чернелиця, Тлумач) 4-8 хв - urgent loud push
-    LEVEL_3B = "level_3b"      # Над містом/передмістям (Тисмениця, Хриплин) 0-2 хв - urgent loud push
-    INFO = "info"              # Інформаційне оновлення (імовірно збита, відворот)
+    LEVEL_1 = "level_1"        # Attention (Pishchanka, Vendychany, Nova/Stara Ushytsia, Dunaivtsi) - silent push
+    LEVEL_2 = "level_2"        # Approaching (Kamianets-Podilskyi, Skala, Borshchiv, Tovste) - loud push
+    LEVEL_3A = "level_3a"      # Close approach (Chernelytsia, Tlumach) 4-8 min - urgent loud push
+    LEVEL_3B = "level_3b"      # Over the city or suburbs (Tysmenytsia, Khryplyn) 0-2 min - urgent loud push
+    INFO = "info"              # Information update (probably shot down, turn away)
 
 
 class TargetStatus(str, Enum):
@@ -42,9 +42,9 @@ class RawPost:
 @dataclass
 class ParsedMessage:
     is_jet: bool
-    points: list[str]          # id пунктів у порядку згадки
-    count: int = 1             # кількість цілей (за замовчуванням 1)
-    explicit_count: bool = False  # чи було в тексті явно вказано кількість (наприклад, 2х, 1 ціль)
+    points: list[str]          # IDs of points in the order of mention
+    count: int = 1             # number of targets (default 1)
+    explicit_count: bool = False  # True if the text states the number explicitly (for example 2х, 1 ціль)
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
     raw_text: str = ""
@@ -54,7 +54,7 @@ class ParsedMessage:
 @dataclass
 class Target:
     id: str
-    points_sequence: list[str] = field(default_factory=list)  # послідовність пройдених пунктів
+    points_sequence: list[str] = field(default_factory=list)  # sequence of points that the target passed
     last_point_id: str = ""
     target_count: int = 1
     status: TargetStatus = TargetStatus.ACTIVE
@@ -78,6 +78,6 @@ class AlertEvent:
     body: str
     is_silent: bool
     eta_window_str: str = ""
-    is_update: bool = False     # чи це редагування попереднього повідомлення
+    is_update: bool = False     # True if this is an edit of an earlier message
     source_links: list[tuple[str, str]] = field(default_factory=list)  # [(channel, url), ...]
 

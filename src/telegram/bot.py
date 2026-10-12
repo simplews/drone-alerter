@@ -1,4 +1,4 @@
-"""Telegram-бот для сповіщення користувачів та онбордингу бета-групи."""
+"""Telegram bot for user alerts and onboarding of the beta group."""
 from __future__ import annotations
 
 import logging
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SubscriberRepository:
-    """Просте сховище підписників бота з дотриманням приватності (команда /stop видаляє дані)."""
+    """Simple storage of bot subscribers with privacy protection (the /stop command deletes the data)."""
 
     def __init__(self, db_path: str = "data/subscribers.db"):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -116,7 +116,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     @dp.message(Command("start"))
     async def cmd_start(message: Message):
         subscribers.add(message.chat.id)
-        # Перевірка deep-link параметрів: /start howitworks або /start disclaimer
+        # Check the deep-link parameters: /start howitworks or /start disclaimer
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) > 1:
             arg = parts[1].strip().lower()
@@ -172,7 +172,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     async def cmd_status(message: Message):
         lines = []
 
-        # 1. Офіційна повітряна тривога
+        # 1. Official air-raid alert
         siren = siren_service.get_current_state() if siren_service else None
         if siren:
             if siren.is_active:
@@ -186,7 +186,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         lines.append(siren_line)
         lines.append("")
 
-        # 2. Раннє виявлення реактивних БпЛА
+        # 2. Early detection of jet drones
         active = tracker.get_active_targets() if tracker else []
         if not active:
             lines.append("🟢 **Активних реактивних цілей на коридорі не зафіксовано.**")
@@ -222,30 +222,30 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
 
 async def broadcast_alert(bot: Bot, subscribers: SubscriberRepository, event: AlertEvent) -> None:
-    """Розсилає компактне сповіщення всім підписникам із прямими посиланнями на джерела."""
+    """Send a compact alert to all subscribers with direct links to the sources."""
     chat_ids = subscribers.get_all()
     if not chat_ids:
         return
 
-    # Отримуємо ім'я бота для формування зручних deep-link посилань
+    # Get the bot name to build convenient deep-link URLs
     bot_username = "simpledronealert_bot"
     try:
         me = await bot.get_me()
         if me and me.username:
             bot_username = me.username
-    except Exception as exc:  # noqa: BLE001 - запасне імʼя бота, не критично
+    except Exception as exc:  # noqa: BLE001 - fallback bot name, not critical
         logger.warning("Не вдалося отримати імʼя бота, використано типове: %s", exc)
 
     parts = [f"**{event.title}**"]
     if event.body:
         parts.append(event.body)
 
-    # Додаємо клікабельні посилання на джерела (першоджерела у Telegram)
+    # Add clickable links to the sources (original Telegram posts)
     if event.source_links:
         src_items = [f"[{ch}]({url})" for ch, url in event.source_links]
         parts.append(f"🔗 Джерело: {', '.join(src_items)}")
 
-    # Для бойових рівнів додаємо навігаційні посилання на "Як рахуємо" та "Дисклеймер"
+    # For combat levels, add navigation links to "Як рахуємо" and "Дисклеймер"
     if event.level != AlertLevel.INFO:
         parts.append(
             f"\nℹ️ [Як ми рахуємо](https://t.me/{bot_username}?start=howitworks) • "
@@ -276,7 +276,7 @@ async def broadcast_siren_event(
     body: str,
     is_silent: bool = False,
 ) -> None:
-    """Розсилає сповіщення про офіційну повітряну тривогу або її відбій."""
+    """Send an alert about an official air-raid alert or its all-clear."""
     chat_ids = subscribers.get_all()
     if not chat_ids:
         return
@@ -296,7 +296,7 @@ async def broadcast_siren_event(
 
 
 async def broadcast_system_warning(bot: Bot, subscribers: SubscriberRepository, text: str) -> None:
-    """Розсилає системне попередження про збій моніторингу або відновлення зв'язку."""
+    """Send a system warning about a monitoring failure or about connection recovery."""
     chat_ids = subscribers.get_all()
     for chat_id in chat_ids:
         try:

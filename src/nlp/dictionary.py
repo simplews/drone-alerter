@@ -18,7 +18,7 @@ CORRIDOR_POINTS = [
 ]
 
 ETA_TABLE = {
-    # id: (min_minutes, max_minutes) — розраховано для v=400–480 км/год
+    # id: (min_minutes, max_minutes), calculated for v=400–480 km/h
     "pishchanka": (32, 40),
     "vendychany": (27, 34),
     "nova_ushytsia": (23, 30),

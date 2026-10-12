@@ -1,4 +1,4 @@
-"""Тести для сервісу моніторингу повітряних тривог (AerialAlertService)."""
+"""Tests for the air-raid alert monitoring service (AerialAlertService)."""
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock
@@ -49,7 +49,7 @@ class TestAerialAlertService(unittest.IsolatedAsyncioTestCase):
             call_count += 1
             if "primary" in str(request.url):
                 return httpx.Response(500, text="Internal Server Error")
-            # Бекап відповідає успішно
+            # The backup answers successfully
             data = {
                 "source": "JAAM data server API",
                 "states": {
@@ -132,23 +132,23 @@ class TestAerialAlertService(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(service.start())
         await asyncio.sleep(0.08)
 
-        # 1. Початковий стан False -> жоден колбек не викликано
+        # 1. Initial state False -> no callback is called
         self.assertFalse(service.get_current_state().is_active)
         on_start.assert_not_called()
         on_end.assert_not_called()
 
-        # 2. Тривога починається (False -> True)
+        # 2. The alert starts (False -> True)
         current_active = True
         await asyncio.sleep(0.12)
         self.assertTrue(service.get_current_state().is_active)
         on_start.assert_called_once()
         on_end.assert_not_called()
 
-        # 3. Наступне опитування: стан залишається True (повторного виклику немає)
+        # 3. Next poll: the state stays True (no repeated call)
         await asyncio.sleep(0.10)
         self.assertEqual(on_start.call_count, 1)
 
-        # 4. Відбій тривоги (True -> False)
+        # 4. Alert all-clear (True -> False)
         current_active = False
         await asyncio.sleep(0.12)
         self.assertFalse(service.get_current_state().is_active)

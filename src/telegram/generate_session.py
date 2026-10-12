@@ -1,9 +1,9 @@
-"""Скрипт для одноразової генерації StringSession для Telethon.
+"""Script to generate a StringSession for Telethon (one-time use).
 
-Підтримує авторизацію через QR-код (без SMS та очікування кодів)
-або за номером телефону.
+It supports authorization through a QR code (no SMS and no code wait)
+or through a phone number.
 
-Запуск:
+Run:
     python -m src.telegram.generate_session
 """
 from __future__ import annotations
