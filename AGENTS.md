@@ -6,6 +6,7 @@ This file is for AI assistants and IDEs (Cursor, Codex, Copilot, Windsurf, Gemin
 ## Project
 drone-alert is an early-warning system for jet-powered drones that fly toward Ivano-Frankivsk. It reads public Telegram channels (Telethon). It finds place names (`src/nlp/`). It calculates the ETA (`src/engine/`). It sends alerts with a bot (aiogram, `src/telegram/`).
 Stack: Python 3.11, FastAPI, SQLAlchemy.
+The engine is city-agnostic. All city-specific data (corridor points, ETA seed, keywords, bot texts, alert region) is in `data/profiles/<city>.json`, loaded by `src/profile.py`. Do not hard-code a city or corridor point in `src/`. See `docs/ADAPTING.md`.
 Bot messages to users are in Ukrainian. Do not translate them. Write new code, comments, docs and commit messages in English.
 More information: `README.md`, `docs/PRD.md`, `docs/LEARNING.md`.
 
