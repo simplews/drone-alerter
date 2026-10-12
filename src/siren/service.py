@@ -1,4 +1,4 @@
-"""Сервіс моніторингу офіційних повітряних тривог через UBilling Aerial Alerts API з підтримкою бекап-джерел."""
+"""Service to monitor official air-raid alerts through the UBilling Aerial Alerts API, with backup sources."""
 from __future__ import annotations
 
 import asyncio
@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
+
+from src.profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +33,11 @@ class SirenState:
 
 
 class AerialAlertService:
-    """Опитує API повітряних тривог та сповіщає про зміну статусу тривоги для заданого регіону."""
+    """Poll the air-raid alert API and report a change of the alert status for the given region."""
 
     def __init__(
         self,
-        region: str = "Івано-Франківська область",
+        region: str | None = None,
         sources: list[str] | None = None,
         poll_interval_seconds: float = 12.0,
         request_timeout_seconds: float = 5.0,
@@ -43,7 +45,7 @@ class AerialAlertService:
         on_alert_end: Callable[[SirenState], Awaitable[None]] | None = None,
         http_client: httpx.AsyncClient | None = None,
     ):
-        self.region = region
+        self.region = region or get_profile().siren_region
         self.sources = list(sources) if sources else list(DEFAULT_SIREN_SOURCES)
         self.poll_interval_seconds = poll_interval_seconds
         self.request_timeout_seconds = request_timeout_seconds
@@ -56,11 +58,11 @@ class AerialAlertService:
         self._last_successful_source: str | None = None
 
     def get_current_state(self) -> SirenState | None:
-        """Повертає поточний зафіксований стан тривоги."""
+        """Return the current recorded alert state."""
         return self._current_state
 
     async def fetch_state(self, client: httpx.AsyncClient | None = None) -> SirenState | None:
-        """Опитує джерела по черзі з автоматичним перемиканням на бекап при помилках."""
+        """Poll the sources in turn. Switch to the backup automatically on errors."""
         owns_client = False
         if client is None:
             if self._custom_client:
@@ -68,12 +70,12 @@ class AerialAlertService:
             else:
                 client = httpx.AsyncClient(
                     timeout=self.request_timeout_seconds,
-                    headers={"User-Agent": "IF-Drone-Alert/1.1 (AerialAlertsMonitor)"},
+                    headers={"User-Agent": f"{get_profile().short_name}-Drone-Alert/1.1 (AerialAlertsMonitor)"},
                 )
                 owns_client = True
 
         try:
-            # Спочатку пробуємо останнє успішне джерело (якщо було), потім решту
+            # Try the last successful source first (if there was one), then the others
             ordered_sources = list(self.sources)
             if self._last_successful_source and self._last_successful_source in ordered_sources:
                 ordered_sources.remove(self._last_successful_source)
@@ -124,11 +126,11 @@ class AerialAlertService:
                 await client.aclose()
 
     async def start(self) -> None:
-        """Основний цикл фонового моніторингу тривог."""
+        """Main loop of the background alert monitoring."""
         self._stop_event.clear()
         logger.info(f"Запуск моніторингу повітряних тривог для '{self.region}'...")
 
-        # Первинне опитування без генерації спам-сповіщення (встановлення базису)
+        # First poll without a spam alert (set the baseline)
         initial = await self.fetch_state()
         if initial:
             self._current_state = initial
@@ -137,22 +139,22 @@ class AerialAlertService:
 
         while not self._stop_event.is_set():
             try:
-                # Очікуємо інтервал перед наступним опитуванням
+                # Wait for the interval before the next poll
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_seconds)
-                    break  # Якщо stop_event спрацював
+                    break  # If stop_event fired
                 except TimeoutError:
                     pass
 
                 state = await self.fetch_state()
                 if state is None:
-                    # Усі джерела впали — зберігаємо попередній стан, не генеруємо хибних тривог/відбоїв
+                    # All sources failed: keep the previous state, do not create false alerts or all-clears
                     continue
 
                 prev_active = self._current_state.is_active if self._current_state else None
                 self._current_state = state
 
-                # Перевірка зміни статусу
+                # Check for a status change
                 if prev_active is not None and prev_active != state.is_active:
                     if state.is_active:
                         logger.warning(f"🚨 ОГОЛОШЕНО ПОВІТРЯНУ ТРИВОГУ: {self.region}!")
@@ -171,7 +173,7 @@ class AerialAlertService:
         logger.info("Моніторинг повітряних тривог зупинено.")
 
     async def stop(self) -> None:
-        """Зупиняє фоновий моніторинг."""
+        """Stop the background monitoring."""
         self._stop_event.set()
         if self._custom_client:
             await self._custom_client.aclose()

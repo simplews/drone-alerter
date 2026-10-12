@@ -1,4 +1,4 @@
-"""Головна точка входу: координація асинхронного слухача, аналізатора цілей, бота та API."""
+"""Main entry point: coordinates the async listener, the target analyzer, the bot and the API."""
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +16,7 @@ from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 from src.learning.store import LearningStore
 from src.nlp.normalizer import MessageNormalizer
@@ -42,33 +42,33 @@ class Application:
     def __init__(self):
         self.stop_event = asyncio.Event()
 
-        # 1. Довідники та сховища
+        # 1. References and storages
         self.repo = ReferenceRepository(settings.reference_dir)
         if not self.repo.versions():
             logger.info("Ініціалізація початкового довідника (seed v0001)...")
-            v1 = self.repo.save_new(seed_from_dictionary())
+            v1 = self.repo.save_new(seed_from_profile())
             self.repo.promote(v1.version)
 
         self.ref_cache = ActiveReferenceCache(self.repo)
         self.learning_store = LearningStore(settings.learning_db_path)
         self.subscriber_repo = SubscriberRepository(settings.subscribers_db_path)
 
-        # 2. Доменне ядро
+        # 2. Domain core
         self.normalizer = MessageNormalizer(self.ref_cache)
         self.tracker = TargetTracker(self.ref_cache, store=self.learning_store)
 
-        # 3. Сервіс офіційних повітряних тривог
+        # 3. Official air-raid alert service
         self.siren_service: AerialAlertService | None = None
         if settings.siren_enabled:
             self.siren_service = AerialAlertService(
-                region=settings.siren_region,
+                region=settings.siren_region or None,
                 sources=settings.siren_sources,
                 poll_interval_seconds=settings.siren_poll_interval_seconds,
                 on_alert_start=self.on_siren_start,
                 on_alert_end=self.on_siren_end,
             )
 
-        # 4. Адаптери Telegram
+        # 4. Telegram adapters
         self.bot: Bot | None = None
         self.bot_dp = None
         if settings.telegram_bot_token:
@@ -91,7 +91,7 @@ class Application:
         else:
             logger.warning("TELETHON_API_ID / HASH не задано. Читання каналів вимкнено.")
 
-        # Реєстрація компонентів у FastAPI
+        # Register the components in FastAPI
         set_app_state(
             tracker=self.tracker,
             ref_cache=self.ref_cache,
@@ -102,7 +102,7 @@ class Application:
         )
 
     async def on_telegram_post(self, post: RawPost) -> None:
-        """Обробляє отриманий пост з каналу в реальному часі."""
+        """Process a post that arrives from a channel in real time."""
         parsed = self.normalizer.parse(post)
         alerts = self.tracker.process_message(post, parsed)
 
@@ -159,7 +159,7 @@ class Application:
 
         tasks = []
 
-        # Фоновий сервер FastAPI (Healthcheck)
+        # Background FastAPI server (healthcheck)
         config = uvicorn.Config(
             app=api_app,
             host=settings.api_host,
@@ -169,22 +169,22 @@ class Application:
         server = uvicorn.Server(config)
         tasks.append(asyncio.create_task(server.serve()))
 
-        # Фоновий запуск монітора повітряних тривог
+        # Start the air-raid alert monitor in the background
         if self.siren_service:
             tasks.append(asyncio.create_task(self.siren_service.start()))
 
-        # Фоновий запуск слухача Telethon
+        # Start the Telethon listener in the background
         if self.listener:
             tasks.append(asyncio.create_task(self.listener.start()))
 
-        # Фоновий запуск бота
+        # Start the bot in the background
         if self.bot and self.bot_dp:
             tasks.append(asyncio.create_task(self.bot_dp.start_polling(self.bot)))
 
-        # Очікування завершення
+        # Wait for completion
         await self.stop_event.wait()
 
-        # Зупинка компонентів (Graceful Shutdown)
+        # Stop the components (graceful shutdown)
         logger.info("Виконується зупинка сервісу...")
         if self.siren_service:
             await self.siren_service.stop()

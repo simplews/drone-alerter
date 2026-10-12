@@ -1,4 +1,4 @@
-"""Тести для FastAPI-ендпоінтів моніторингу та здоров'я (/health, /targets)."""
+"""Tests for the FastAPI monitoring and health endpoints (/health, /targets)."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +10,7 @@ from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 
 
@@ -18,7 +18,7 @@ class TestApiServer(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = ReferenceRepository(Path(self.tmp.name) / "ref")
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.cache = ActiveReferenceCache(self.repo)
         self.tracker = TargetTracker(self.cache)

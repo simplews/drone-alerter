@@ -8,7 +8,8 @@ The system reads public Telegram monitoring channels. It finds the names of plac
 
 - Text that the bot sends to users is in Ukrainian. Do not translate it.
 - Existing code comments are in Ukrainian. Write new code, comments, docs and commit messages in English.
-- More information: `README.md` (architecture), `docs/PRD.md` (requirements), `docs/LEARNING.md` (learning), `docs/DEPLOYMENT.md`.
+- The engine is city-agnostic. Do not hard-code a city, region or corridor point in `src/`. Put it in the profile.
+- More information: `README.md` (architecture), `docs/PRD.md` (requirements), `docs/LEARNING.md` (learning), `docs/DEPLOYMENT.md`, `docs/ADAPTING.md` (other cities).
 
 ## Commands
 - Environment: `.venv` (Python). Dependencies are in `requirements.txt`. Run the CLI with `.venv/bin/python -m src.learning.cli ...`.
@@ -20,15 +21,16 @@ The system reads public Telegram monitoring channels. It finds the names of plac
 ## Structure
 - `src/telegram/`: Telethon listener (`listener.py`), aiogram bot (`bot.py`), session generator, `export_history.py`.
 - `src/nlp/`: place-name normalization (grammatical cases, homonyms) and action types (`DOWNED`, `LOST`, `DIVERTED`).
+- `src/profile.py` and `data/profiles/<city>.json`: the city profile. All city-specific data (corridor points, ETA seed, keywords, bot texts, alert region) lives there. The `CITY_PROFILE` setting selects it. See `docs/ADAPTING.md`.
 - `src/engine/`: target tracker, ETA, simulation, `shadow_runner.py` (replay of historical episodes).
 - `src/learning/`: versioned references `data/reference/vNNNN.json` (the file `ACTIVE` points to the active version), calibration, labels in `data/learning.db`.
 - `src/siren/`: official air-raid alerts. `src/api/`: `/health` and `/targets`.
 - `data/attacks_october.json`: raw channel posts. Git ignores this file. Do not commit it.
 
 ## Target labels (`label`)
-Allowed results: `reached_if`, `downed_en_route_if`, `diverted`, `unknown`.
-- `reached_if` needs `--arrived-at <ISO UTC>Z`. Do not use `--arrived-at` with other results.
-- `downed_en_route_if`: the target flew toward IF and was shot down. `diverted`: the target flew to a different region.
+Allowed results: `reached_target`, `downed_en_route`, `diverted`, `unknown`.
+- `reached_target` needs `--arrived-at <ISO UTC>Z`. Do not use `--arrived-at` with other results.
+- `downed_en_route`: the target flew toward IF and was shot down. `diverted`: the target flew to a different region.
 - Arbitration rule: `arrived-at` is the first mention of Khryplyn or the airfield. A post that names Khryplyn means the target arrived. A post that names Tysmenytsia means the target is almost over the city, but it does not name Khryplyn (medium confidence).
 - Target IDs have the format `T-YYYYMMDDHHMM-xxxx`. The time in the ID is UTC. Channels show UTC time. Kyiv time is UTC+3 until 25.10.2026.
 - A dataset record is a time cluster of place names. One physical target can have more than one record ("twins"). Twins get the same label. Mark this assumption in the record.
@@ -52,7 +54,7 @@ The repository is public or can become public. Everyone can see each commit. Git
 
 ### Secrets and data
 - Put secrets only in environment variables or `.env` (Git ignores `.env`). Never put tokens, `TELETHON_STRING_SESSION`, API hashes or subscriber `chat_id` values in code, tests, fixtures, docs, logs or commit messages. In tests, use clear fake values (for example `123456:TEST`).
-- When you add a configuration option, add it to `src/config.py` and `.env.example` in the same change. Do not put a real value in `.env.example`.
+- When you add a configuration option, add it to `src/config.py` and `.env.example` in the same change. Add a new city-specific value to the profile, not to `src/config.py`. Do not put a real value in `.env.example`.
 - Do not commit `*.db`, `*.session`, `data/attacks_*.json`, `data/historical_*.json`, channel dumps or personal data of subscribers. Keep `subscribers.db` local or in the container volume.
 - If a secret enters a commit, assume that it is compromised. Revoke it and issue a new one first (BotFather, my.telegram.org, `generate_session`). Then clean the history.
 - Reference files `data/reference/vNNNN.json` are immutable. Do not edit an existing version. Create a new version with `retrain` or `promote`.

@@ -1,4 +1,4 @@
-"""CLI-утиліта для запуску тестових сповіщень у Telegram-бот (drone / siren / all_clear)."""
+"""CLI utility to send test alerts to the Telegram bot (drone / siren / all_clear)."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,7 @@ import httpx
 
 from src.config import settings
 from src.engine.models import AlertEvent, AlertLevel
+from src.profile import get_profile
 from src.telegram.bot import (
     SubscriberRepository,
     broadcast_alert,
@@ -19,7 +20,7 @@ from src.utils.time import now_kyiv
 
 
 async def send_via_api(api_url: str, alert_type: str) -> bool:
-    """Пробує надіслати тестове сповіщення через активний HTTP API сервера."""
+    """Try to send a test alert through the active HTTP API of the server."""
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.post(f"{api_url}/test-alert?type={alert_type}")
@@ -35,7 +36,7 @@ async def send_via_api(api_url: str, alert_type: str) -> bool:
 
 
 async def send_directly(alert_type: str) -> None:
-    """Надсилає тестове сповіщення напряму підписникам через токен бота."""
+    """Send a test alert directly to the subscribers with the bot token."""
     from aiogram import Bot
 
     if not settings.telegram_bot_token:
@@ -58,7 +59,7 @@ async def send_directly(alert_type: str) -> None:
         if alert_type == "siren":
             title = "🧪🚨🔴 **[ТЕСТ] ПОВІТРЯНА ТРИВОГА!**"
             body = (
-                f"Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області** (о {time_str}).\n\n"
+                f"Це тестова перевірка системи сповіщень про повітряну тривогу в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
                 "⚠️ Реальної небезпеки немає — це перевірка звуку та доставки.\n"
                 "Перевірте, чи спрацював звуковий сигнал/вібрація."
             )
@@ -66,7 +67,7 @@ async def send_directly(alert_type: str) -> None:
         elif alert_type == "all_clear":
             title = "🧪🟢 **[ТЕСТ] ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області** (о {time_str}).\n\n"
+                f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
                 "Тест доставки сигналу відбою."
             )
             await broadcast_siren_event(bot, repo, title, body, is_silent=False)
@@ -111,7 +112,7 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Спочатку пробуємо через запущений API, якщо ні — напряму
+    # Try the running API first. If that fails, send directly
     ok = await send_via_api(args.api_url, args.type)
     if not ok:
         await send_directly(args.type)

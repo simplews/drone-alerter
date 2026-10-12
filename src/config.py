@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     
     monitored_channels: list[str] = ["monitoring_zaxid", "kpszsu", "kudy_letyt", "monitorwarr"]
 
+    city_profile: str = "ivano-frankivsk"
+    profiles_dir: str = "data/profiles"
+
     reference_dir: str = "data/reference"
     learning_db_path: str = "data/learning.db"
     subscribers_db_path: str = "data/subscribers.db"
@@ -17,7 +20,8 @@ class Settings(BaseSettings):
     api_port: int = 8080
 
     siren_enabled: bool = True
-    siren_region: str = "Івано-Франківська область"
+    # Empty value: use the region from the city profile
+    siren_region: str = ""
     siren_poll_interval_seconds: float = 12.0
     siren_sources: list[str] = [
         "https://ubilling.net.ua/aerialalerts/",

@@ -166,7 +166,7 @@ Oracle Cloud надає безкоштовно назавжди:
    ```
 3. Розмічайте результат:
    ```bash
-   python -m src.learning.cli label T-202603240400-abcd reached_if --arrived-at 2026-03-24T04:22:00Z
+   python -m src.learning.cli label T-202603240400-abcd reached_target --arrived-at 2026-03-24T04:22:00Z
    ```
 4. Переглядайте Go/No-Go scorecard:
    ```bash

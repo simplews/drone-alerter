@@ -1,4 +1,4 @@
-"""Telegram-бот для сповіщення користувачів та онбордингу бета-групи."""
+"""Telegram bot for user alerts and onboarding of the beta group."""
 from __future__ import annotations
 
 import logging
@@ -11,13 +11,14 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.engine.models import AlertEvent, AlertLevel
+from src.profile import get_profile
 from src.utils.time import format_kyiv_time, now_kyiv
 
 logger = logging.getLogger(__name__)
 
 
 class SubscriberRepository:
-    """Просте сховище підписників бота з дотриманням приватності (команда /stop видаляє дані)."""
+    """Simple storage of bot subscribers with privacy protection (the /stop command deletes the data)."""
 
     def __init__(self, db_path: str = "data/subscribers.db"):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -56,11 +57,15 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     dp = Dispatcher()
 
     def get_howitworks_text() -> str:
+        texts = get_profile().texts
+        levels = "\n\n".join(
+            level["title"] + "\n" + "\n".join(level["items"]) for level in texts["howitworks_levels"]
+        )
         return (
             "ℹ️ **ЯК ПРАЦЮЄ СИСТЕМА ТА ЯК МИ РАХУЄМО ЧАС (ETA)**\n\n"
-            "Бот створений для завчасного інформування мешканців Івано-Франківська та прилеглих районів "
+            f"Бот створений для завчасного інформування мешканців {texts['city_gen']} та прилеглих районів "
             "про потенційну загрозу реактивних БпЛА, що рухаються транзитним коридором "
-            "(Вінниччина → Хмельниччина → Тернопільщина → Франківщина).\n\n"
+            f"({texts['route_regions']}).\n\n"
             "📡 **1. Джерела моніторингу (канали, які відстежуються):**\n"
             "Система в реальному часі аналізує повідомлення з офіційних та перевірених каналів:\n"
             "• [@monitoring_zaxid](https://t.me/monitoring_zaxid) — Моніторинг Захід (найбільш оперативне джерело по Заходу)\n"
@@ -81,24 +86,8 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
             "• **Розрахункове вікно:** Вказується діапазон від найшвидшого прямого дольоту до руху з маневрами "
             "(наприклад, `13:31–13:38`, що відповідає `25–32 хв`).\n"
             "• **Часовий пояс:** Усі часові мітки та вікна підльоту подаються за **Київським часом** (`Europe/Kyiv`).\n\n"
-            "📊 **4. Актуальний довідник рубежів до Івано-Франківська:**\n\n"
-            "🟡 **Рівень 1 — Потенційна загроза на підходах:**\n"
-            "• **Піщанка:** ~265 км | орієнтовно **34–45 хв**\n"
-            "• **Вендичани:** ~225 км | орієнтовно **29–39 хв**\n"
-            "• **Нова Ушиця:** ~190 км | орієнтовно **26–33 хв**\n"
-            "• **Стара Ушиця:** ~165 км | орієнтовно **21–28 хв**\n"
-            "• **Дунаївці:** ~150 км | орієнтовно **19–26 хв**\n\n"
-            "🟠 **Рівень 2 — Наближення:**\n"
-            "• **Кам’янець-Подільський:** ~135 км | орієнтовно **17–23 хв**\n"
-            "• **Скала-Подільська:** ~110 км | орієнтовно **14–19 хв**\n"
-            "• **Борщів:** ~85 км | орієнтовно **12–16 хв**\n"
-            "• **Товсте:** ~65 км | орієнтовно **9–13 хв**\n"
-            "• **Городенка:** ~45 км | орієнтовно **6–9 хв**\n\n"
-            "🔴 **Рівень 3 — Безпосередня небезпека:**\n"
-            "• **Чернелиця:** ~35 км | орієнтовно **4–7 хв**\n"
-            "• **Тлумач:** ~25 км | орієнтовно **3–5 хв**\n"
-            "• **Отинія / Коломия:** ~20–30 км | орієнтовно **3–6 хв**\n"
-            "• **Тисмениця / Хриплин:** рубежі передмістя | орієнтовно **1–3 хв**\n\n"
+            f"📊 **4. Актуальний довідник рубежів до {texts['city_gen']}:**\n\n"
+            f"{levels}\n\n"
             "⚠️ **5. Важливе застереження:**\n"
             "Час є суто математичним орієнтиром. За сигналом тривоги завжди прямуйте в безпечні місця!\n"
             "Повний дисклеймер: /disclaimer"
@@ -116,7 +105,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     @dp.message(Command("start"))
     async def cmd_start(message: Message):
         subscribers.add(message.chat.id)
-        # Перевірка deep-link параметрів: /start howitworks або /start disclaimer
+        # Check the deep-link parameters: /start howitworks or /start disclaimer
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) > 1:
             arg = parts[1].strip().lower()
@@ -127,11 +116,12 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                 await message.answer(get_disclaimer_text(), parse_mode="Markdown")
                 return
 
+        texts = get_profile().texts
         text = (
-            "👋 **Вітаємо в системі завчасного попередження про загрози на Івано-Франківськ!**\n\n"
+            f"👋 **Вітаємо в системі завчасного попередження про загрози на {texts['city_acc']}!**\n\n"
             "🔔 **Що відстежує цей бот:**\n"
-            "1. 🚨 **Офіційні повітряні тривоги** по Івано-Франківській області (оголошення та відбій).\n"
-            "2. ⚡️ **Завчасне раннє попередження** про рух реактивних БпЛА вздовж коридору Поділля → Тернопільщина → Франківськ з розрахунком вікна підльоту (ETA).\n\n"
+            f"1. 🚨 **Офіційні повітряні тривоги** по {texts['region_loc']} (оголошення та відбій).\n"
+            f"2. ⚡️ **Завчасне раннє попередження** про рух реактивних БпЛА вздовж коридору {texts['route_short']} з розрахунком вікна підльоту (ETA).\n\n"
             "⚠️ **ВАЖЛИВО: Безпековий дисклеймер**\n"
             "• Додаток є аналітичним інструментом і ніколи не дає команди «безпечно».\n"
             "• Завжди переходьте в укриття за офіційним сигналом тривоги.\n\n"
@@ -172,7 +162,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     async def cmd_status(message: Message):
         lines = []
 
-        # 1. Офіційна повітряна тривога
+        # 1. Official air-raid alert
         siren = siren_service.get_current_state() if siren_service else None
         if siren:
             if siren.is_active:
@@ -186,7 +176,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         lines.append(siren_line)
         lines.append("")
 
-        # 2. Раннє виявлення реактивних БпЛА
+        # 2. Early detection of jet drones
         active = tracker.get_active_targets() if tracker else []
         if not active:
             lines.append("🟢 **Активних реактивних цілей на коридорі не зафіксовано.**")
@@ -222,30 +212,30 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
 
 async def broadcast_alert(bot: Bot, subscribers: SubscriberRepository, event: AlertEvent) -> None:
-    """Розсилає компактне сповіщення всім підписникам із прямими посиланнями на джерела."""
+    """Send a compact alert to all subscribers with direct links to the sources."""
     chat_ids = subscribers.get_all()
     if not chat_ids:
         return
 
-    # Отримуємо ім'я бота для формування зручних deep-link посилань
+    # Get the bot name to build convenient deep-link URLs
     bot_username = "simpledronealert_bot"
     try:
         me = await bot.get_me()
         if me and me.username:
             bot_username = me.username
-    except Exception as exc:  # noqa: BLE001 - запасне імʼя бота, не критично
+    except Exception as exc:  # noqa: BLE001 - fallback bot name, not critical
         logger.warning("Не вдалося отримати імʼя бота, використано типове: %s", exc)
 
     parts = [f"**{event.title}**"]
     if event.body:
         parts.append(event.body)
 
-    # Додаємо клікабельні посилання на джерела (першоджерела у Telegram)
+    # Add clickable links to the sources (original Telegram posts)
     if event.source_links:
         src_items = [f"[{ch}]({url})" for ch, url in event.source_links]
         parts.append(f"🔗 Джерело: {', '.join(src_items)}")
 
-    # Для бойових рівнів додаємо навігаційні посилання на "Як рахуємо" та "Дисклеймер"
+    # For combat levels, add navigation links to "Як рахуємо" and "Дисклеймер"
     if event.level != AlertLevel.INFO:
         parts.append(
             f"\nℹ️ [Як ми рахуємо](https://t.me/{bot_username}?start=howitworks) • "
@@ -276,7 +266,7 @@ async def broadcast_siren_event(
     body: str,
     is_silent: bool = False,
 ) -> None:
-    """Розсилає сповіщення про офіційну повітряну тривогу або її відбій."""
+    """Send an alert about an official air-raid alert or its all-clear."""
     chat_ids = subscribers.get_all()
     if not chat_ids:
         return
@@ -296,7 +286,7 @@ async def broadcast_siren_event(
 
 
 async def broadcast_system_warning(bot: Bot, subscribers: SubscriberRepository, text: str) -> None:
-    """Розсилає системне попередження про збій моніторингу або відновлення зв'язку."""
+    """Send a system warning about a monitoring failure or about connection recovery."""
     chat_ids = subscribers.get_all()
     for chat_id in chat_ids:
         try:

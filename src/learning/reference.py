@@ -1,8 +1,10 @@
-"""Версійовані довідники: пункти коридору, таблиця ETA, ключові слова.
+"""Versioned references: corridor points, ETA table, keywords.
 
-Кожне оновлення створює новий незмінний файл ``vNNNN.json``. Рушій читає лише
-активну версію (номер у файлі ``ACTIVE``). Тому будь-яку зміну можна
-переглянути, порівняти з попередньою і відкотити.
+The first version comes from the city profile (``data/profiles``).
+
+Each update creates a new immutable file ``vNNNN.json``. The engine reads only the
+active version (the number in the file ``ACTIVE``). So you can review
+any change, compare it with the previous version and roll it back.
 """
 from __future__ import annotations
 
@@ -13,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from src.profile import CityProfile, get_profile
+
 from .text import normalize
 
 STATUS_ACTIVE = "active"
@@ -20,30 +24,20 @@ STATUS_PENDING = "pending"
 STATUS_REJECTED = "rejected"
 STATUS_ARCHIVED = "archived"
 
-# Слова, які схожі на назви пунктів, але ними не є (області, сторони світу,
-# службові слова). Використовується під час пошуку нових назв.
-DEFAULT_STOPWORDS = [
-    "україна", "увага", "оновлення", "upd", "захід", "схід", "північ", "південь",
-    "повітряні", "сили", "реактивна", "реактивний", "реактивні", "герань", "шахед",
-    "бпла", "іф", "франківськ", "івано-франківськ", "тернопіль", "хмельницький",
-    "волинь", "буковина", "поділля",
-]
-
-
 @dataclass
 class PointRef:
     id: str
     names: list[str]
     level: int
-    # Відстань до опорної точки (аеродром). Лише для розрахунків на сервері,
-    # користувачу не показується.
+    # Distance to the reference point (airfield). Only the server uses it for
+    # calculations. The user does not see it.
     distance_km: float | None = None
     eta_min: float | None = None
     eta_max: float | None = None
     # seed | manual | physics | minmax+margin[+prior] | empirical_q
     eta_method: str = "none"
     n_obs: int = 0
-    # P(ціль іде на ІФ | ціль згадана в цьому пункті), згладжена оцінка.
+    # P(target goes to the city | target mentioned at this point), smoothed estimate.
     base_rate: float | None = None
     n_outcomes: int = 0
 
@@ -56,17 +50,17 @@ class ReferenceData:
     status: str = STATUS_PENDING
     points: dict[str, PointRef] = field(default_factory=dict)
     speed_kmh: list[float] = field(default_factory=lambda: [400.0, 480.0])
-    # Шум часу публікації (хв). Враховує запізнення і першої згадки, і
-    # повідомлення про прибуття.
+    # Publication time noise (minutes). It covers the delay of the first mention and
+    # of the arrival message.
     post_lag_min: list[float] = field(default_factory=lambda: [0.5, 1.5])
 
     target_keywords: list[str] = field(default_factory=list)
     cancel_keywords: list[str] = field(default_factory=list)
-    stopwords: list[str] = field(default_factory=lambda: list(DEFAULT_STOPWORDS))
+    stopwords: list[str] = field(default_factory=list)
     changelog: list[str] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
 
-    # --- серіалізація ---------------------------------------------------
+    # --- serialization ---------------------------------------------
     def to_dict(self) -> dict:
         data = asdict(self)
         data["points"] = {pid: asdict(p) for pid, p in self.points.items()}
@@ -78,9 +72,9 @@ class ReferenceData:
         points = {pid: PointRef(**p) for pid, p in data.pop("points", {}).items()}
         return cls(points=points, **data)
 
-    # --- допоміжне ------------------------------------------------------
+    # --- helpers ------------------------------------------------------
     def alias_index(self) -> dict[str, str]:
-        """Нормалізована назва -> id пункту."""
+        """Normalized name -> point ID."""
         index: dict[str, str] = {}
         for pid, point in self.points.items():
             for name in point.names:
@@ -109,7 +103,7 @@ def _atomic_write(path: Path, content: str) -> None:
 
 
 class ReferenceRepository:
-    """Сховище версій довідників у теці (за замовчуванням ``data/reference``)."""
+    """Storage of reference versions in a directory (default ``data/reference``)."""
 
     def __init__(self, root: str | os.PathLike):
         self.root = Path(root)
@@ -166,7 +160,7 @@ class ReferenceRepository:
         self.set_status(version, STATUS_REJECTED)
 
     def rollback(self) -> int:
-        """Повертає попередню версію (parent активної). Повертає її номер."""
+        """Return the previous version (the parent of the active one). Return its number."""
         current = self.active()
         if current.parent_version is None:
             raise LookupError("Немає попередньої версії для відкату")
@@ -177,9 +171,9 @@ class ReferenceRepository:
 
 
 class ActiveReferenceCache:
-    """Для рушія: віддає активну версію і перечитує її, коли змінився ACTIVE.
+    """For the engine: return the active version and reload it when ACTIVE changes.
 
-    Так нова версія підхоплюється без перезапуску сервісу.
+    So the service picks up a new version without a restart.
     """
 
     def __init__(self, repo: ReferenceRepository):
@@ -195,45 +189,28 @@ class ActiveReferenceCache:
         return self._ref
 
 
-def seed_from_dictionary() -> ReferenceData:
-    """Перша версія з src/nlp/dictionary.py (дані з PRD)."""
-    from src.nlp import dictionary as d
-
-    # Реальні відстані польоту до Івано-Франківська вздовж коридору
-    known_distances = {
-        "khryplyn": 7.0,
-        "tysmenytsia": 12.0,
-        "tlumach": 25.0,
-        "chernelytsia": 54.0,
-        "tovste": 75.0,
-        "borshchiv": 95.0,
-        "skala_podilska": 110.0,
-        "kamianets_podilskyi": 135.0,
-        "dunaivtsi": 160.0,
-        "stara_ushytsia": 165.0,
-        "nova_ushytsia": 190.0,
-        "vendychany": 225.0,
-        "tomashpil": 250.0,
-        "pishchanka": 265.0,
-    }
-
-
+def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
+    """First version from the city profile (default: the profile that the settings select)."""
+    profile = profile or get_profile()
     points: dict[str, PointRef] = {}
-    for item in d.CORRIDOR_POINTS:
-        pid = item["id"]
-        eta = d.ETA_TABLE.get(pid)
-        points[pid] = PointRef(
-            id=pid,
+    for item in profile.points:
+        eta_min, eta_max = item.get("eta_min"), item.get("eta_max")
+        has_eta = eta_min is not None
+        points[item["id"]] = PointRef(
+            id=item["id"],
             names=list(item["names"]),
             level=item["level"],
-            distance_km=known_distances.get(pid),
-            eta_min=float(eta[0]) if eta else None,
-            eta_max=float(eta[1]) if eta else None,
-            eta_method="seed" if eta else "none",
+            distance_km=item.get("distance_km"),
+            eta_min=float(eta_min) if has_eta else None,
+            eta_max=float(eta_max) if has_eta else None,
+            eta_method="seed" if has_eta else "none",
         )
     return ReferenceData(
         points=points,
-        target_keywords=list(d.TARGET_KEYWORDS),
-        cancel_keywords=list(d.CANCEL_KEYWORDS),
-        changelog=["Початкова версія з src/nlp/dictionary.py (дані PRD, 8 епізодів 8–10.10.2026)"],
+        speed_kmh=list(profile.speed_kmh),
+        post_lag_min=list(profile.post_lag_min),
+        target_keywords=list(profile.target_keywords),
+        cancel_keywords=list(profile.cancel_keywords),
+        stopwords=list(profile.stopwords),
+        changelog=[f"Початкова версія з профілю {profile.id}"],
     )

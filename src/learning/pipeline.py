@@ -1,7 +1,7 @@
-"""Цикл перенавчання: дані -> кандидат-версія -> перевірка -> (схвалення) -> активна.
+"""Retraining cycle: data -> candidate version -> check -> (approval) -> active.
 
-Запускається пакетно (раз на добу або вручну), а не онлайн після кожного
-поста: ETA не повинен змінюватися посеред атаки, поки сповіщення вже йдуть.
+It runs in batches (once a day or by hand), not online after each
+post. The ETA must not change in the middle of an attack while alerts are in progress.
 """
 from __future__ import annotations
 
@@ -23,14 +23,14 @@ from .text import normalize
 
 @dataclass
 class LearningConfig:
-    # Не перенавчати, якщо є нерозмічені цілі, що з'явилися за останні N год.
+    # Do not retrain if unlabeled targets appeared in the last N hours.
     freeze_window_hours: float = 3.0
-    # Частка найсвіжіших цілей, на яких перевіряється нова версія.
+    # Share of the most recent targets that the code uses to check the new version.
     holdout_fraction: float = 0.3
-    # Менше цілей у перевірці — автоматичне просування заборонене.
+    # If the check has fewer targets, automatic promotion is not allowed.
     min_holdout_targets: int = 3
-    # Нова версія не може розширити середній діапазон більше ніж у стільки разів,
-    # якщо при цьому не покращує покриття.
+    # The new version must not widen the mean range by more than this factor
+    # unless it also improves the coverage.
     max_width_growth: float = 1.5
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
 
@@ -51,7 +51,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
     cand = active.clone_as_candidate()
     log = cand.changelog
 
-    # 1. Схвалені людиною назви.
+    # 1. Names that a person approved.
     index = cand.alias_index()
     for alias in aliases:
         pid = alias.decided_point_id
@@ -67,9 +67,9 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
                 index[norm] = pid
                 log.append(f"Назва «{norm}» -> {pid}")
 
-    # 2. Відстані та швидкість реактивних БпЛА.
-    from .reference import seed_from_dictionary
-    seed_points = seed_from_dictionary().points
+    # 2. Distances and speed of the jet drones.
+    from .reference import seed_from_profile
+    seed_points = seed_from_profile().points
     for pid, point in cand.points.items():
         if point.distance_km is None and pid in seed_points:
             point.distance_km = seed_points[pid].distance_km
@@ -77,7 +77,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
     cand.post_lag_min = [0.5, 1.5]
     speed = fit_speed(observations, cand.points, cfg)
     if speed:
-        # обмежуємо швидкість діапазоном реактивних БпЛА Shahed-238
+        # limit the speed to the range of Shahed-238 jet drones
         speed = [max(380.0, speed[0]), min(500.0, speed[1])]
     else:
         speed = [400.0, 480.0]
@@ -86,7 +86,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
         log.append(f"Швидкість {cand.speed_kmh} -> {speed} км/год")
         cand.speed_kmh = speed
 
-    # 3. ETA по пунктах.
+    # 3. ETA for each point.
     durations: dict[str, list[float]] = defaultdict(list)
     for obs in observations:
         durations[obs.point_id].append(obs.minutes_to_arrival)
@@ -102,7 +102,7 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
         if durations.get(pid):
             point.n_obs = len(durations[pid])
 
-    # 4. Базові частоти P(ІФ | пункт).
+    # 4. Base rates P(city | point).
     for pid, (rate, n) in base_rates(outcomes, cfg).items():
         if pid not in cand.points:
             continue
@@ -151,7 +151,7 @@ def retrain(store: LearningStore, repo: ReferenceRepository, cfg: LearningConfig
     if not candidate.changelog:
         return RetrainReport("skipped", "Нових змін немає")
 
-    # Перевірка процедури на найсвіжіших цілях: вчимося на старших, міряємо на новіших.
+    # Check the procedure on the most recent targets: learn from the older ones, measure on the newer ones.
     train, test, n_test_targets = _split_by_time(observations, store.target_first_seen(), cfg.holdout_fraction)
     trial = build_candidate(active, train, outcomes, aliases, cfg.calibration)
     m_active = evaluate(active.points, test)
@@ -190,7 +190,7 @@ def retrain(store: LearningStore, repo: ReferenceRepository, cfg: LearningConfig
 
 
 def diff(old: ReferenceData, new: ReferenceData) -> list[str]:
-    """Людиночитна різниця між двома версіями (для перегляду перед схваленням)."""
+    """Human-readable difference between two versions (for review before approval)."""
     lines: list[str] = []
     for pid in sorted(set(old.points) | set(new.points)):
         a, b = old.points.get(pid), new.points.get(pid)

@@ -1,9 +1,9 @@
-"""Пошук нових назв пунктів і нових форм відомих назв у постах про цілі.
+"""Search for new point names and new forms of known names in posts about targets.
 
-Нічого не додається до словника автоматично: знахідки потрапляють у чергу
-``alias_candidates``, а людина схвалює або відхиляє їх (CLI `aliases`,
-`approve-alias`, `reject-alias`). Причина — омоніми: евристика легко сплутає
-«Скала» і «Скалат» або два різні села «Товсте».
+The code never adds anything to the dictionary automatically. Findings go into the
+``alias_candidates`` queue. A person approves or rejects them (CLI `aliases`,
+`approve-alias`, `reject-alias`). Reason: homonyms. The heuristic can easily confuse
+«Скала» and «Скалат», or two different villages named «Товсте».
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class DiscoveryReport:
 
 
 def suggest_point(phrase: str, ref: ReferenceData) -> str | None:
-    """Id відомого пункту, відмінком якого може бути ця фраза."""
+    """ID of a known point. This phrase can be a grammatical case of its name."""
     for pid, point in ref.points.items():
         if any(phrases_match(phrase, name) for name in point.names):
             return pid

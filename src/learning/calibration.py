@@ -1,13 +1,13 @@
-"""Калібрування таблиці ETA і базових частот за розміченими даними.
+"""Calibration of the ETA table and the base rates with labeled data.
 
-Принципи (див. docs/LEARNING.md):
-1. Поки даних мало (n < min_obs_empirical), нові спостереження можуть
-   лише РОЗШИРИТИ діапазон: об'єднуємо їх із попереднім діапазоном і
-   фізичною оцінкою (відстань / швидкість).
-2. Коли даних достатньо, переходимо на емпіричні квантилі, але звужувати
-   діапазон дозволено не більше ніж на N хв за одне оновлення.
-   Розширювати — без обмежень (недооцінка часу безпечніша за переоцінку).
-3. Межі округлюються назовні: нижня вниз, верхня вгору.
+Principles (see docs/LEARNING.md):
+1. While data is scarce (n < min_obs_empirical), new observations can only
+   WIDEN the range. The code merges them with the previous range and with
+   the physical estimate (distance / speed).
+2. When data is sufficient, the code uses empirical quantiles. It can narrow
+   the range by N minutes at most for each update.
+   It can widen the range without limit (an underestimate of time is safer than an overestimate).
+3. The bounds round outward: the lower bound down, the upper bound up.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class CalibrationConfig:
     margin_min: float = 1.0
     max_narrowing_per_update_min: float = 6.0
     min_speed_obs: int = 4
-    # Beta(a, b) апріорі для P(ІФ | пункт). (1, 1) — рівномірний.
+    # Beta(a, b) prior for P(city | point). (1, 1) is uniform.
     base_rate_prior: tuple[float, float] = (1.0, 1.0)
 
 
@@ -56,7 +56,7 @@ def physics_interval(distance_km: float, speed_kmh: list[float], lag_min: list[f
 
 def fit_speed(observations: list[ArrivalObservation], points: dict[str, PointRef],
               cfg: CalibrationConfig) -> list[float] | None:
-    """Діапазон швидкості з усіх спостережень, де відома відстань пункту."""
+    """Speed range from all observations where the distance to the point is known."""
     speeds = []
     for obs in observations:
         point = points.get(obs.point_id)
@@ -77,14 +77,14 @@ def _union(a: tuple[float, float] | None, b: tuple[float, float] | None) -> tupl
 
 def calibrate_point(point: PointRef, durations: list[float], speed_kmh: list[float],
                     lag_min: list[float], cfg: CalibrationConfig) -> tuple[float, float, str] | None:
-    """Новий діапазон ETA для пункту або None, якщо оцінити нема з чого."""
+    """New ETA range for the point, or None if there is no basis for an estimate."""
     prev = (point.eta_min, point.eta_max) if point.eta_min is not None and point.eta_max is not None else None
     physics = physics_interval(point.distance_km, speed_kmh, lag_min) if point.distance_km else None
     n = len(durations)
 
     if n == 0:
         if prev is not None:
-            return None  # нових даних немає — нічого не змінюємо
+            return None  # no new data, so change nothing
         if physics is None:
             return None
         lo, hi, method = physics[0], physics[1], "physics"
@@ -118,8 +118,8 @@ def calibrate_point(point: PointRef, durations: list[float], speed_kmh: list[flo
 
 
 def base_rates(rows: list[OutcomeRow], cfg: CalibrationConfig) -> dict[str, tuple[float, int]]:
-    """P(ціль іде на ІФ | згадка пункту). Позитив — долетіла або збита на шляху до ІФ,
-    негатив — пішла в іншу область. unknown не враховується."""
+    """P(target goes to the city | point mention). Positive: the target arrived or was shot down on the way to the city.
+    Negative: the target went to a different region. The code ignores unknown."""
     pos: dict[str, int] = defaultdict(int)
     total: dict[str, int] = defaultdict(int)
     for row in rows:
@@ -133,7 +133,7 @@ def base_rates(rows: list[OutcomeRow], cfg: CalibrationConfig) -> dict[str, tupl
 
 
 def evaluate(points: dict[str, PointRef], observations: list[ArrivalObservation]) -> dict:
-    """Покриття: частка спостережень, у яких фактичний час потрапив у діапазон ETA."""
+    """Coverage: the share of observations where the actual time was inside the ETA range."""
     hits = 0
     widths: list[float] = []
     per_point: dict[str, list[int]] = defaultdict(lambda: [0, 0])

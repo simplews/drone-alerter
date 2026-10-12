@@ -11,6 +11,7 @@ services:
       - TELETHON_API_HASH=${TELETHON_API_HASH}
       - TELETHON_STRING_SESSION=${TELETHON_STRING_SESSION}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - CITY_PROFILE=${CITY_PROFILE:-ivano-frankivsk}
       - REFERENCE_DIR=/app/data/reference
       - LEARNING_DB_PATH=/app/data/learning.db
       - SUBSCRIBERS_DB_PATH=/app/data/subscribers.db

@@ -1,4 +1,4 @@
-"""Тести для модуля симуляції тіньового режиму (ShadowModeSimulator)."""
+"""Tests for the shadow mode simulation module (ShadowModeSimulator)."""
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -9,7 +9,7 @@ from src.engine.simulation import ShadowModeSimulator, SimulationEpisode
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
-    seed_from_dictionary,
+    seed_from_profile,
 )
 
 T0 = datetime(2026, 10, 10, 21, 28, tzinfo=UTC)
@@ -19,7 +19,7 @@ class TestShadowModeSimulator(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = ReferenceRepository(Path(self.tmp.name) / "ref")
-        v1 = self.repo.save_new(seed_from_dictionary())
+        v1 = self.repo.save_new(seed_from_profile())
         self.repo.promote(v1.version)
         self.cache = ActiveReferenceCache(self.repo)
         self.simulator = ShadowModeSimulator(self.cache)
@@ -28,12 +28,12 @@ class TestShadowModeSimulator(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_run_simulation_with_lead_time_verification(self):
-        # Маршрут 8:
-        # 21:28 Стара Ушиця
-        # 21:31 Камʼянець (Рівень 2)
-        # Офіційна небезпека по району оголошена о 21:38 (випередження = 7 хв!)
-        # Перша згадка Івано-Франківщини в ручних моніторингах о 21:38 (випередження = 7 хв!)
-        # Розрахункове прибуття до міста: 21:50-22:00
+        # Route 8:
+        # 21:28 Stara Ushytsia
+        # 21:31 Kamianets-Podilskyi (level 2)
+        # The official district alert was declared at 21:38 (lead time = 7 min!)
+        # First mention of Ivano-Frankivsk region in the manual monitoring at 21:38 (lead time = 7 min!)
+        # Calculated arrival at the city: 21:50-22:00
         episodes = [
             SimulationEpisode(
                 episode_id="route_8",
@@ -43,7 +43,7 @@ class TestShadowModeSimulator(unittest.TestCase):
                     RawPost("monitoring_zaxid", 2, "Камʼянець-Подільський", T0 + timedelta(minutes=3)),
                     RawPost("monitoring_zaxid", 3, "Товсте", T0 + timedelta(minutes=15)),
                 ],
-                actual_arrival_utc=T0 + timedelta(minutes=26),  # 21:54 (всередині вікна 21:50-22:00)
+                actual_arrival_utc=T0 + timedelta(minutes=26),  # 21:54 (inside the window 21:50-22:00)
                 official_alert_utc=T0 + timedelta(minutes=10),   # 21:38
                 manual_channel_mention_utc=T0 + timedelta(minutes=10), # 21:38
             )
@@ -56,7 +56,7 @@ class TestShadowModeSimulator(unittest.TestCase):
         self.assertEqual(metrics.lead_time_over_official_minutes, [7.0])
         self.assertEqual(metrics.lead_time_over_manual_minutes, [7.0])
         
-        # Перевірка виконання критеріїв Go/No-Go
+        # Check that the Go/No-Go criteria are met
         self.assertTrue(metrics.go_no_go_checklist["ETA coverage >= 80%"])
         self.assertTrue(metrics.go_no_go_checklist["Lead time over official alert >= 7 min"])
         self.assertTrue(metrics.go_no_go_checklist["Lead time over manual channels >= 5 min"])

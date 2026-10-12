@@ -1,8 +1,8 @@
-"""SQLite-сховище даних для навчання: цілі, згадки пунктів, мітки результату,
-сирі пости (з обмеженим терміном зберігання) і кандидати в нові назви.
+"""SQLite storage for learning data: targets, point mentions, outcome labels,
+raw posts (with a limited retention time) and candidates for new names.
 
-Свідомо НЕ зберігаємо, де саме і коли ціль збили: для моделі достатньо мітки
-``downed_en_route_if`` («не долетіла»). Архів точок збиття — чутливі дані.
+By design, the code does NOT store where and when a target was shot down. The label
+``downed_en_route`` ("did not arrive") is enough for the model. An archive of shoot-down points is sensitive data.
 """
 from __future__ import annotations
 
@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-OUTCOME_REACHED = "reached_if"           # долетіла до ІФ (є час прибуття)
-OUTCOME_DOWNED = "downed_en_route_if"    # йшла на ІФ, але не долетіла
-OUTCOME_DIVERTED = "diverted"            # пішла в іншу область
+OUTCOME_REACHED = "reached_target"      # arrived at the city (has an arrival time)
+OUTCOME_DOWNED = "downed_en_route"      # went toward the city but did not arrive
+OUTCOME_DIVERTED = "diverted"            # went to a different region
 OUTCOME_UNKNOWN = "unknown"
+_LEGACY_OUTCOMES = {"reached_if": "reached_target", "downed_en_route_if": "downed_en_route"}
 OUTCOMES = {OUTCOME_REACHED, OUTCOME_DOWNED, OUTCOME_DIVERTED, OUTCOME_UNKNOWN}
 
 _SCHEMA = """
@@ -74,7 +75,7 @@ def parse_utc(value: str) -> datetime:
 
 @dataclass(frozen=True)
 class ArrivalObservation:
-    """Одне спостереження для таблиці ETA: перша згадка пункту -> прибуття."""
+    """One observation for the ETA table: first mention of a point -> arrival."""
     target_id: str
     point_id: str
     first_post_utc: datetime
@@ -107,15 +108,22 @@ class LearningStore:
         self.conn = sqlite3.connect(str(path))
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate_legacy_outcomes()
+
+    def _migrate_legacy_outcomes(self) -> None:
+        """Rename the old city-specific labels (``*_if``) in existing databases."""
+        with self.conn:
+            for old, new in _LEGACY_OUTCOMES.items():
+                self.conn.execute("UPDATE targets SET outcome=? WHERE outcome=?", (new, old))
 
     def close(self) -> None:
         self.conn.close()
 
-    # --- запис подій (викликає рушій трекінгу) ---------------------------
+    # --- write events (the tracking engine calls these) ---------------
     def add_post(self, channel: str, message_id: int, posted_at: datetime, text: str,
                  is_target_related: bool) -> None:
-        """Зберігає або оновлює пост. Редагування поста з новим текстом
-        скидає прапорець сканування, щоб нові назви теж потрапили в аналіз."""
+        """Store or update a post. An edit of a post with new text
+        resets the scan flag, so the new names also go into the analysis."""
         posted = to_utc_iso(posted_at)
         with self.conn:
             row = self.conn.execute(
@@ -149,15 +157,15 @@ class LearningStore:
                 (target_id, point_id, channel, message_id, posted),
             )
 
-    # --- розмітка (людина, раз на добу) ---------------------------------
+    # --- labeling (a person, once a day) -------------------------------
     def label_target(self, target_id: str, outcome: str, arrived_at: datetime | None = None,
                      notes: str | None = None) -> None:
         if outcome not in OUTCOMES:
             raise ValueError(f"Невідомий результат {outcome!r}. Допустимі: {sorted(OUTCOMES)}")
         if outcome == OUTCOME_REACHED and arrived_at is None:
-            raise ValueError("Для reached_if потрібен час прибуття (arrived_at)")
+            raise ValueError("Для reached_target потрібен час прибуття (arrived_at)")
         if outcome != OUTCOME_REACHED and arrived_at is not None:
-            raise ValueError("Час прибуття вказується лише для reached_if")
+            raise ValueError("Час прибуття вказується лише для reached_target")
         with self.conn:
             cur = self.conn.execute(
                 "UPDATE targets SET outcome=?, arrived_at_utc=?, labeled_at_utc=?, notes=? WHERE id=?",
@@ -180,7 +188,7 @@ class LearningStore:
         ).fetchall()
 
     def has_open_targets(self, now: datetime, window_hours: float) -> bool:
-        """Чи є нерозмічені цілі, які з'явилися нещодавно (можливо, ще летять)."""
+        """True if unlabeled targets appeared recently (they can still be in flight)."""
         since = to_utc_iso(now - timedelta(hours=window_hours))
         row = self.conn.execute(
             "SELECT 1 FROM targets WHERE outcome IS NULL AND first_seen_utc >= ? LIMIT 1", (since,)
@@ -193,9 +201,9 @@ class LearningStore:
             (OUTCOME_UNKNOWN,),
         ).fetchone()[0]
 
-    # --- вибірки для навчання -------------------------------------------
+    # --- samples for learning ------------------------------------------
     def arrival_observations(self) -> list[ArrivalObservation]:
-        """Для кожної долетілої цілі й кожного пункту — найраніша згадка серед усіх каналів."""
+        """For each target that arrived and each point: the earliest mention across all channels."""
         rows = self.conn.execute(
             "SELECT m.target_id, m.point_id, MIN(m.posted_at_utc) AS first_post, t.arrived_at_utc"
             " FROM mentions m JOIN targets t ON t.id = m.target_id"
@@ -208,7 +216,7 @@ class LearningStore:
             first = parse_utc(r["first_post"])
             minutes = (parse_utc(r["arrived_at_utc"]) - first).total_seconds() / 60
             if minutes < 0:
-                continue  # згадка після прибуття (зведення постфактум) — не спостереження
+                continue  # mention after arrival (a summary written later) is not an observation
             result.append(ArrivalObservation(r["target_id"], r["point_id"], first, minutes))
         return result
 
@@ -223,7 +231,7 @@ class LearningStore:
         rows = self.conn.execute("SELECT id, first_seen_utc FROM targets").fetchall()
         return {r["id"]: parse_utc(r["first_seen_utc"]) for r in rows}
 
-    # --- пости для пошуку нових назв ------------------------------------
+    # --- posts for the search of new names -----------------------------
     def unscanned_target_posts(self) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT channel, message_id, posted_at_utc, text FROM posts"
@@ -243,7 +251,7 @@ class LearningStore:
         with self.conn:
             return self.conn.execute("DELETE FROM posts WHERE posted_at_utc < ?", (cutoff,)).rowcount
 
-    # --- кандидати в назви ----------------------------------------------
+    # --- name candidates -----------------------------------------------
     def upsert_alias_candidate(self, phrase_norm: str, surface: str, seen_at: str,
                                suggested_point_id: str | None, example: str) -> None:
         with self.conn:

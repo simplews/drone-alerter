@@ -1,4 +1,4 @@
-"""FastAPI мікро-сервер для healthcheck, моніторингу активних цілей та UptimeRobot."""
+"""FastAPI micro-server for the healthcheck, active-target monitoring and UptimeRobot."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -6,12 +6,13 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from src.profile import get_profile
 from src.telegram.bot import broadcast_siren_event
 from src.utils.time import now_kyiv
 
-app = FastAPI(title="IF Drone Alert API", version="1.1.0")
+app = FastAPI(title=f"{get_profile().short_name} Drone Alert API", version="1.1.0")
 
-# Глобальні посилання на компоненти рушія (встановлюються під час запуску в main.py)
+# Global references to the engine components (main.py sets them at startup)
 _tracker = None
 _ref_cache = None
 _listener = None
@@ -40,7 +41,7 @@ def set_app_state(
 
 @app.get("/health")
 def healthcheck() -> dict[str, Any]:
-    """Перевірка життєздатності сервісу для UptimeRobot та Docker healthcheck."""
+    """Check that the service is alive (for UptimeRobot and the Docker healthcheck)."""
     uptime_seconds = (datetime.now(UTC) - _start_time).total_seconds()
     active_targets_count = len(_tracker.get_active_targets()) if _tracker else 0
     ref_version = _ref_cache.get().version if _ref_cache else 0
@@ -62,7 +63,7 @@ def healthcheck() -> dict[str, Any]:
 
 @app.get("/targets")
 def get_targets() -> list[dict[str, Any]]:
-    """Повертає поточні активні цілі в форматі JSON для веб-панелі."""
+    """Return the current active targets as JSON for the web dashboard."""
     if not _tracker:
         return []
 
@@ -88,7 +89,7 @@ def get_targets() -> list[dict[str, Any]]:
 
 @app.post("/test-alert")
 async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
-    """Надсилає тестове сповіщення всім підписникам бота (type: drone | siren | all_clear)."""
+    """Send a test alert to all bot subscribers (type: drone | siren | all_clear)."""
     if not _bot or not _subscribers:
         return {"status": "error", "message": "Бот або репозиторій підписників не ініціалізовано"}
 
@@ -102,7 +103,7 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     if type == "siren":
         title = "🧪🚨🔴 **[ТЕСТ] ПОВІТРЯНА ТРИВОГА!**"
         body = (
-            f"Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області** (о {time_str}).\n\n"
+            f"Це тестова перевірка системи сповіщень про повітряну тривогу в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
             "⚠️ Реальної небезпеки немає — це перевірка звуку та доставки.\n"
             "Перевірте, чи спрацював звуковий сигнал/вібрація."
         )
@@ -110,7 +111,7 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     elif type == "all_clear":
         title = "🧪🟢 **[ТЕСТ] ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
         body = (
-            f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області** (о {time_str}).\n\n"
+            f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
             "Тест доставки сигналу відбою."
         )
         await broadcast_siren_event(_bot, _subscribers, title, body, is_silent=False)
