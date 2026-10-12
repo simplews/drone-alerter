@@ -6,10 +6,11 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from src.profile import get_profile
 from src.telegram.bot import broadcast_siren_event
 from src.utils.time import now_kyiv
 
-app = FastAPI(title="IF Drone Alert API", version="1.1.0")
+app = FastAPI(title=f"{get_profile().short_name} Drone Alert API", version="1.1.0")
 
 # Global references to the engine components (main.py sets them at startup)
 _tracker = None
@@ -102,7 +103,7 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     if type == "siren":
         title = "🧪🚨🔴 **[ТЕСТ] ПОВІТРЯНА ТРИВОГА!**"
         body = (
-            f"Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області** (о {time_str}).\n\n"
+            f"Це тестова перевірка системи сповіщень про повітряну тривогу в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
             "⚠️ Реальної небезпеки немає — це перевірка звуку та доставки.\n"
             "Перевірте, чи спрацював звуковий сигнал/вібрація."
         )
@@ -110,7 +111,7 @@ async def trigger_test_alert(type: str = "drone") -> dict[str, Any]:
     elif type == "all_clear":
         title = "🧪🟢 **[ТЕСТ] ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
         body = (
-            f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області** (о {time_str}).\n\n"
+            f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
             "Тест доставки сигналу відбою."
         )
         await broadcast_siren_event(_bot, _subscribers, title, body, is_silent=False)

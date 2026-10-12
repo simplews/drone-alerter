@@ -19,7 +19,7 @@ from telethon.sessions import StringSession
 
 async def main():
     print("=" * 65)
-    print("   ГЕНЕРАТОР STRINGSESSION ДЛЯ TELETHON (DRONE ALERT IF)")
+    print("   ГЕНЕРАТОР STRINGSESSION ДЛЯ TELETHON (DRONE ALERT)")
     print("=" * 65)
 
     api_id_val = os.environ.get("TELETHON_API_ID")

@@ -18,6 +18,7 @@ from src.engine.models import (
 from src.learning.reference import ActiveReferenceCache, ReferenceData
 from src.learning.store import LearningStore
 from src.learning.text import normalize
+from src.profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +292,7 @@ class TargetTracker:
         elif parsed.action == ActionType.DIVERTED:
             target.status = TargetStatus.DIVERTED
             body = (
-                f"↗️ Ціль у районі {point_name} змінила курс і відвернула з коридору на Франківськ. "
+                f"↗️ Ціль у районі {point_name} змінила курс і відвернула з коридору {get_profile().texts['divert_phrase']}. "
                 f"Слідкуйте за офіційними повідомленнями."
             )
             alerts.append(AlertEvent(

@@ -10,6 +10,7 @@ import httpx
 
 from src.config import settings
 from src.engine.models import AlertEvent, AlertLevel
+from src.profile import get_profile
 from src.telegram.bot import (
     SubscriberRepository,
     broadcast_alert,
@@ -58,7 +59,7 @@ async def send_directly(alert_type: str) -> None:
         if alert_type == "siren":
             title = "🧪🚨🔴 **[ТЕСТ] ПОВІТРЯНА ТРИВОГА!**"
             body = (
-                f"Це тестова перевірка системи сповіщень про повітряну тривогу в **Івано-Франківській області** (о {time_str}).\n\n"
+                f"Це тестова перевірка системи сповіщень про повітряну тривогу в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
                 "⚠️ Реальної небезпеки немає — це перевірка звуку та доставки.\n"
                 "Перевірте, чи спрацював звуковий сигнал/вібрація."
             )
@@ -66,7 +67,7 @@ async def send_directly(alert_type: str) -> None:
         elif alert_type == "all_clear":
             title = "🧪🟢 **[ТЕСТ] ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **Івано-Франківській області** (о {time_str}).\n\n"
+                f"Це тестова перевірка сповіщення про відбій повітряної тривоги в **{get_profile().texts['region_loc']}** (о {time_str}).\n\n"
                 "Тест доставки сигналу відбою."
             )
             await broadcast_siren_event(bot, repo, title, body, is_silent=False)
