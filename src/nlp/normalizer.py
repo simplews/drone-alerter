@@ -30,6 +30,19 @@ _ANOTHER_TARGET_RE = re.compile(
 )
 
 
+# Distant regions that do not belong to the western approach corridor
+_DISTANT_REGION_RE = re.compile(
+    r"(?i)\b(брянськ|брянщин|чернігів|сумщин|сумськ|харків|полтав|дніпропетров|запоріж|"
+    r"херсон|миколаїв|одещин|одеськ|кіровоград|черкащин|черкаськ|донецьк|луганськ|крим|"
+    r"київщин|київськ|вишгород|бровар|дарниц|дврз|чорнобил|славутич)\w*"
+)
+
+# Approach / western regions relevant to the corridor
+_CORRIDOR_REGION_RE = re.compile(
+    r"(?i)\b(вінниччин|вінницьк|хмельниччин|хмельницьк|тернопіль|франків|прикарпат|буковин|чернівецьк|львів|рівнен|волин)\w*"
+)
+
+
 class MessageNormalizer:
     """Message analyzer that can inherit the target type from the context."""
 
@@ -41,6 +54,16 @@ class MessageNormalizer:
 
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
+
+    @staticmethod
+    def _has_divert_phrase(line_norm: str, cancel_keywords: list[str]) -> bool:
+        if _DIVERTED_RE.search(line_norm):
+            return True
+        return any(
+            kw.lower() in line_norm
+            for kw in cancel_keywords
+            if kw.lower().startswith(("на ", "повз ")) or "відверн" in kw.lower() or "курс" in kw.lower()
+        )
 
     def parse(self, post: RawPost) -> ParsedMessage:
         text = post.text
@@ -57,84 +80,119 @@ class MessageNormalizer:
         if last_jet_time and (now - last_jet_time) <= self._context_window:
             inherited_jet = True
 
-        # 3. Detect settlements in the corridor
-        points_found: list[str] = []
+        # 3. Line-aware analysis for multi-region digests and actions
         alias_index = ref.alias_index()
-
-        # Sort the aliases from longer to shorter, so "нова ушиця" matches before "ушиця"
         sorted_aliases = sorted(alias_index.keys(), key=len, reverse=True)
-        matched_spans: list[tuple[int, int]] = []
+        alias_patterns = [
+            (alias, re.compile(rf"(?i)(?:\b|^){re.escape(alias)}(?:\b|$)"))
+            for alias in sorted_aliases
+        ]
 
-        for alias in sorted_aliases:
-            # Look for the alias with word boundaries, or at the start/end of the line
-            pattern = re.compile(rf"(?i)(?:\b|^){re.escape(alias)}(?:\b|$)")
-            for match in pattern.finditer(norm_text):
-                start, end = match.span()
-                # Check that a longer alias does not already cover this fragment
-                overlap = any(s <= start < e or s < end <= e for s, e in matched_spans)
-                if not overlap:
-                    matched_spans.append((start, end))
-                    point_id = alias_index[alias]
-                    if point_id not in points_found:
-                        points_found.append(point_id)
+        points_found: list[str] = []
+        divert_detected = False
+        divert_point_id: str | None = None
+        downed_detected = False
+        lost_detected = False
+        explosion_detected = False
+        clear_detected = False
+        relevant_lines: list[str] = []
 
-        # 4. Detect actions
+        # Track whether the current paragraph block belongs to a distant region header (e.g. "Чернігівщина:")
+        in_distant_section = False
+
+        for raw_line in text.splitlines():
+            line_strip = raw_line.strip()
+            if not line_strip:
+                in_distant_section = False
+                continue
+
+            line_norm = normalize(line_strip)
+
+            # Check if this line is a section header or mentions a region
+            has_distant = bool(_DISTANT_REGION_RE.search(line_norm))
+            has_corridor_reg = bool(_CORRIDOR_REGION_RE.search(line_norm))
+
+            if line_strip.endswith(":") and has_distant and not has_corridor_reg:
+                in_distant_section = True
+                continue
+            if line_strip.endswith(":") and has_corridor_reg:
+                in_distant_section = False
+
+            # Find corridor points on this specific line
+            line_points: list[str] = []
+            line_spans: list[tuple[int, int]] = []
+            for alias, pat in alias_patterns:
+                for m in pat.finditer(line_norm):
+                    s, e = m.span()
+                    if not any( es <= s < ee or es < e <= ee for es, ee in line_spans):
+                        line_spans.append((s, e))
+                        pid = alias_index[alias]
+                        if pid not in line_points:
+                            line_points.append(pid)
+
+            # Ignore lines that belong to distant regions unless they explicitly mention a corridor point
+            if (in_distant_section or (has_distant and not has_corridor_reg)) and not line_points:
+                continue
+
+            line_has_divert = self._has_divert_phrase(line_norm, ref.cancel_keywords)
+
+            if line_points and line_has_divert:
+                # Example: "Реактивний БпЛА курсом на Закупне повз Дунаївці"
+                # The drone is passing/leaving the corridor point towards a diversion destination!
+                divert_detected = True
+                if divert_point_id is None:
+                    divert_point_id = line_points[0]
+            elif line_points:
+                for pid in line_points:
+                    if pid not in points_found:
+                        points_found.append(pid)
+                relevant_lines.append(line_strip)
+            elif line_has_divert:
+                divert_detected = True
+
+            if _DOWNED_RE.search(line_norm):
+                downed_detected = True
+            elif _LOST_RE.search(line_norm):
+                lost_detected = True
+            elif _EXPLOSION_RE.search(line_norm):
+                explosion_detected = True
+            elif _CLEAR_RE.search(line_norm):
+                clear_detected = True
+
+        # 4. Determine overall action
+        # Note: if an active corridor point is still reported on another line (e.g. a second drone at Dunaivtsi),
+        # keep points_found so the active drone continues to be tracked; only set DIVERTED when no active corridor
+        # points remain or when the action is DOWNED/LOST.
         action = ActionType.NONE
-        if _DOWNED_RE.search(norm_text):
+        if downed_detected:
             action = ActionType.DOWNED
-        elif _LOST_RE.search(norm_text):
+        elif lost_detected:
             action = ActionType.LOST
-        elif _EXPLOSION_RE.search(norm_text):
+        elif explosion_detected:
             action = ActionType.EXPLOSION
-        elif _DIVERTED_RE.search(norm_text) or any(kw.lower() in norm_text for kw in ref.cancel_keywords if "на " in kw.lower() or "відверн" in kw.lower() or "курс" in kw.lower()):
+        elif divert_detected and not points_found:
             action = ActionType.DIVERTED
-        elif _CLEAR_RE.search(norm_text):
+        elif clear_detected and not points_found:
             action = ActionType.CLEAR
 
-        # 5. Count the targets (locally for the found points, to avoid false matches from summary messages)
+        # 5. Count the targets locally in relevant corridor lines
         count = 1
         explicit_count = False
-        if points_found and matched_spans:
-
-            # Find the local context around the found points
-            # Find the paragraph or line boundaries around the found points
-            first_span_start = min(s for s, e in matched_spans)
-            last_span_end = max(e for s, e in matched_spans)
-            
-            # Look for the paragraph boundary (\n\n or \n)
-            prev_nl = text.rfind("\n\n", 0, first_span_start)
-            if prev_nl == -1:
-                # Try a single line break if this is a list of regions
-                prev_nl = text.rfind("\n", 0, first_span_start)
-            start_ctx = 0 if prev_nl == -1 else prev_nl + 1
-
-            next_nl = text.find("\n\n", last_span_end)
-            if next_nl == -1:
-                next_nl = text.find("\n", last_span_end)
-            end_ctx = len(text) if next_nl == -1 else next_nl
-
-            local_text = text[start_ctx:end_ctx]
-            for pattern, extractor in _COUNT_PATTERNS:
-                m = pattern.search(local_text)
-                if m:
-                    count = extractor(m)
-                    explicit_count = True
-                    break
-        else:
-            for pattern, extractor in _COUNT_PATTERNS:
-                m = pattern.search(text)
-                if m:
-                    count = extractor(m)
-                    explicit_count = True
-                    break
+        search_target_text = "\n".join(relevant_lines) if relevant_lines else text
+        for pattern, extractor in _COUNT_PATTERNS:
+            m = pattern.search(search_target_text)
+            if m:
+                count = extractor(m)
+                explicit_count = True
+                break
 
         # If a jet target is confirmed, extend the context window of the channel
         is_jet = explicit_jet or (inherited_jet and bool(points_found or action != ActionType.NONE))
         if is_jet:
             self._channel_jet_context[post.channel] = now
 
-        # Bind the action to the first found point
-        action_point = points_found[0] if points_found else None
+        # Bind the action to the first found point or diverted point
+        action_point = points_found[0] if points_found else divert_point_id
         is_new_target_marker = bool(_ANOTHER_TARGET_RE.search(norm_text))
 
         return ParsedMessage(
