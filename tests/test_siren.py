@@ -190,6 +190,30 @@ class TestAerialAlertService(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ТРИВОГА", args[0])
         self.assertIn("Івано-Франківська область", args[0])
 
+    async def test_siren_broadcast_locative_case(self):
+        from unittest.mock import patch
+
+        from src.main import Application
+
+        app = Application()
+        app.bot = MagicMock()
+
+        state_start = SirenState(region="Івано-Франківська область", is_active=True)
+        with patch("src.main.broadcast_siren_event", new_callable=AsyncMock) as mock_broadcast:
+            await app.on_siren_start(state_start)
+            mock_broadcast.assert_called_once()
+            call_args = mock_broadcast.call_args[0]
+            # Verify body contains "В Івано-Франківській області оголошено повітряну тривогу"
+            self.assertIn("В **Івано-Франківській області** оголошено повітряну тривогу", call_args[3])
+
+        state_end = SirenState(region="Івано-Франківська область", is_active=False)
+        with patch("src.main.broadcast_siren_event", new_callable=AsyncMock) as mock_broadcast:
+            await app.on_siren_end(state_end)
+            mock_broadcast.assert_called_once()
+            call_args = mock_broadcast.call_args[0]
+            # Verify body contains "В Івано-Франківській області оголошено відбій повітряної тривоги"
+            self.assertIn("В **Івано-Франківській області** оголошено відбій повітряної тривоги", call_args[3])
+
 
 if __name__ == "__main__":
     unittest.main()

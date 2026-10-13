@@ -20,6 +20,7 @@ from src.learning.reference import (
 )
 from src.learning.store import LearningStore
 from src.nlp.normalizer import MessageNormalizer
+from src.profile import get_profile
 from src.siren import AerialAlertService, SirenState
 from src.telegram.bot import (
     SubscriberRepository,
@@ -139,9 +140,10 @@ class Application:
         logger.warning(f"🚨 [ПОВІТРЯНА ТРИВОГА] Оголошено тривогу: {state.region}")
         if self.bot:
             time_str = now_kyiv().strftime("%H:%M")
+            region_text = get_profile().texts.get("region_loc", state.region)
             title = "🚨🔴 **ПОВІТРЯНА ТРИВОГА!**"
             body = (
-                f"В **{state.region}** оголошено повітряну тривогу (о {time_str})!\n\n"
+                f"В **{region_text}** оголошено повітряну тривогу (о {time_str})!\n\n"
                 f"Негайно прямуйте в укриття або перебувайте в безпечному місці!\n"
                 f"Слідкуйте за офіційними повідомленнями ОВА та Повітряних сил."
             )
@@ -151,9 +153,10 @@ class Application:
         logger.info(f"🟢 [ВІДБІЙ ТРИВОГИ] Відбій повітряної тривоги: {state.region}")
         if self.bot:
             time_str = now_kyiv().strftime("%H:%M")
+            region_text = get_profile().texts.get("region_loc", state.region)
             title = "🟢 **ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"В **{state.region}** оголошено відбій повітряної тривоги (о {time_str}).\n\n"
+                f"В **{region_text}** оголошено відбій повітряної тривоги (о {time_str}).\n\n"
                 f"Загроза минула. Будьте уважні та бережіть себе!"
             )
             await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)

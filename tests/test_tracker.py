@@ -37,14 +37,16 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
         self.assertTrue(alerts1[0].is_silent)
+        self.assertEqual(alerts1[0].title, "🟡 Потенційна загроза (реактивна герань): Нова ушиця")
 
-        # 2. Borshchiv (level 2, loud)
+        # 2. Borshchiv (level 2, loud) - inherits target_type from earlier post
         t2 = T0 + timedelta(minutes=10)
         p2 = RawPost("chan_a", 2, "Борщів", t2)
         alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
         self.assertEqual(len(alerts2), 1)
         self.assertEqual(alerts2[0].level, AlertLevel.LEVEL_2)
         self.assertFalse(alerts2[0].is_silent)
+        self.assertEqual(alerts2[0].title, "🟠 Наближення (реактивна герань): Борщів")
 
         # 3. Tlumach (level 3a, close approach)
         t3 = T0 + timedelta(minutes=18)
@@ -53,6 +55,7 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts3), 1)
         self.assertEqual(alerts3[0].level, AlertLevel.LEVEL_3A)
         self.assertFalse(alerts3[0].is_silent)
+        self.assertEqual(alerts3[0].title, "🔴 Небезпека (підліт) (реактивна герань): Тлумач")
 
         # 4. Khryplyn (level 3b, over the city)
         t4 = T0 + timedelta(minutes=24)
@@ -61,6 +64,7 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts4), 1)
         self.assertEqual(alerts4[0].level, AlertLevel.LEVEL_3B)
         self.assertFalse(alerts4[0].is_silent)
+        self.assertEqual(alerts4[0].title, "🔴 Небезпека біля / над містом (реактивна герань): Хриплин")
 
     def test_direct_level_2_entry_without_level_1(self):
         # Requirement F5: the target comes from the south, passes Ushytsia and goes straight to Kamianets-Podilskyi
@@ -120,8 +124,8 @@ class TestTargetTracker(unittest.TestCase):
         alerts1 = tracker_no_siren.process_message(p_div1, self.normalizer.parse(p_div1), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].title, "Ціль змінила курс")
-        self.assertIn("Ціль змінила курс у напрямку іншої області", alerts1[0].body)
-        self.assertIn("Слідкуйте за офіційними повідомленнями", alerts1[0].body)
+        self.assertIn("Ціль у районі Нова ушиця відвернула на Хмельницького", alerts1[0].body)
+        self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її все ж буде оголошено", alerts1[0].body)
 
         # 2. Divert with active siren
         tracker_siren = TargetTracker(self.cache, is_siren_active_fn=lambda: True)
@@ -132,7 +136,7 @@ class TestTargetTracker(unittest.TestCase):
         alerts2 = tracker_siren.process_message(p_div2, self.normalizer.parse(p_div2), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts2), 1)
         self.assertEqual(alerts2[0].title, "Ціль змінила курс")
-        self.assertIn("змінила курс і прямує в іншому напрямку", alerts2[0].body)
+        self.assertIn("Ціль у районі Нова ушиця відвернула на Північ", alerts2[0].body)
         self.assertIn("Залишайтеся в укриттях до оголошення відбою", alerts2[0].body)
 
     def test_level_1_target_eta_timeout_marked_lost(self):
