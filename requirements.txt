@@ -1,5 +1,5 @@
 telethon>=1.45.0
-aiogram>=3.13.0
+aiogram>=3.31.0
 fastapi>=0.115.0
 uvicorn>=0.30.0
 sqlalchemy>=2.0.35
