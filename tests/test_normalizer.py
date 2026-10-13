@@ -112,6 +112,33 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed3.action_point_id, "dunaivtsi")
         self.assertEqual(parsed3.divert_destination, "Городок")
 
+        # 4. Grammatical case normalization for regions (locative -щині/-ччині -> accusative -щину/-ччину)
+        p4 = RawPost("chan_a", 43, "Реактивний БпЛА курсом на Рівненщині", T0)
+        parsed4 = self.normalizer.parse(p4)
+        self.assertEqual(parsed4.divert_destination, "Рівненщину")
+
+    def test_distant_region_does_not_trigger_divert_action(self):
+        # A post describing drone heading in Zhytomyr region / Berdychiv without corridor points
+        # must NOT trigger ActionType.DIVERTED for western corridor
+        p = RawPost("kpszsu", 86185, "🏍 Реактивний БпЛА на Житомирщині, курс Бердичів", T0)
+        parsed = self.normalizer.parse(p)
+        self.assertEqual(parsed.action, ActionType.NONE)
+        self.assertEqual(parsed.points, [])
+
+    def test_distant_section_place_name_not_matched_as_corridor_point(self):
+        # Digest with Kamianets under Kirovohrad region header
+        text = (
+            "Житомирщина:\n"
+            "Реактивний БпЛА курсом на Чоповичі\n\n"
+            "Кіровоградщина:\n"
+            "Реактивний БпЛА курсом на Камʼянець\n"
+            "Реактивний БпЛА курсом на Голованівськ"
+        )
+        p = RawPost("kudy_letyt", 122901, text, T0)
+        parsed = self.normalizer.parse(p)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
 
 if __name__ == "__main__":
     unittest.main()
