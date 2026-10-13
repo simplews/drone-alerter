@@ -184,7 +184,21 @@ class ActiveReferenceCache:
     def get(self) -> ReferenceData:
         version = self._repo.active_version()
         if self._ref is None or version != self._version:
-            self._ref = self._repo.active()
+            ref = self._repo.active()
+            try:
+                profile = get_profile()
+                for kw in profile.target_keywords:
+                    if kw not in ref.target_keywords:
+                        ref.target_keywords.append(kw)
+                for kw in profile.cancel_keywords:
+                    if kw not in ref.cancel_keywords:
+                        ref.cancel_keywords.append(kw)
+                for sw in profile.stopwords:
+                    if sw not in ref.stopwords:
+                        ref.stopwords.append(sw)
+            except Exception:  # noqa: BLE001, S110
+                pass
+            self._ref = ref
             self._version = version
         return self._ref
 

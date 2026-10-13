@@ -267,6 +267,72 @@ class TestTargetTracker(unittest.TestCase):
         self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
         self.assertEqual(len(self.tracker.get_active_targets()), 2)
 
+    def test_overnight_episodes_divert_to_lviv_and_ignore_bryansk(self):
+        """Replicate 13 Oct overnight episodes:
+        1. Drone at Dunaivtsi must NOT be diverted by 'Брянська обл -> на північ Чернігівщини'.
+        2. 'Реактивний БпЛА курсом на Закупне повз Дунаївці' must divert the Dunaivtsi target, NOT create a new one.
+        3. Multi-region digest where Khmelnytskyi/Ternopil has 'на Смотрич', 'на Микулинці', 'на Козову', 'на Львів'
+           must divert the target immediately.
+        """
+        t0 = datetime(2026, 10, 13, 3, 13, 25, tzinfo=UTC)
+        p1 = RawPost("monitoring_zaxid", 301, "Хмельниччина:\n1 реактивна герань на Дунаївці", t0)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=t0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Distant region post with 'на північ' must NOT divert our target
+        t_bryansk = datetime(2026, 10, 13, 3, 16, 5, tzinfo=UTC)
+        p_bryansk = RawPost("kpszsu", 302, "🏍 Реактивний БпЛА з Брянської області ➡️ на північ Чернігівщини", t_bryansk)
+        parsed_bryansk = self.normalizer.parse(p_bryansk)
+        self.assertEqual(parsed_bryansk.action, ActionType.NONE)
+        alerts_b = self.tracker.process_message(p_bryansk, parsed_bryansk, now=t_bryansk)
+        self.assertEqual(len(alerts_b), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Now 'Реактивний БпЛА курсом на Закупне повз Дунаївці' inside a multi-region digest
+        t_zakupne = datetime(2026, 10, 13, 3, 17, 37, tzinfo=UTC)
+        digest_text = (
+            "Чернігівщина:\n"
+            "Реактивний БпЛА курсом на Сновськ\n\n"
+            "Хмельниччина:\n"
+            "Реактивний БпЛА курсом на Закупне повз Дунаївці"
+        )
+        p_zakupne = RawPost("kudy_letyt", 303, digest_text, t_zakupne)
+        parsed_z = self.normalizer.parse(p_zakupne)
+        self.assertEqual(parsed_z.points, [])
+        self.assertEqual(parsed_z.action, ActionType.DIVERTED)
+        self.assertEqual(parsed_z.action_point_id, "dunaivtsi")
+
+        alerts_z = self.tracker.process_message(p_zakupne, parsed_z, now=t_zakupne)
+        self.assertEqual(len(alerts_z), 1)
+        self.assertEqual(alerts_z[0].title, "Ціль змінила курс")
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+        # Also verify Smotrych / Mykulyntsi / Kozova / Lviv digest diverts an active target
+        t_ep1 = datetime(2026, 10, 13, 1, 51, 0, tzinfo=UTC)
+        p_ep1 = RawPost("kudy_letyt", 304, "Хмельниччина:\nРеактивний БпЛА курсом на Дунаївці", t_ep1)
+        self.tracker.process_message(p_ep1, self.normalizer.parse(p_ep1), now=t_ep1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t_smotrych = datetime(2026, 10, 13, 1, 55, 10, tzinfo=UTC)
+        smotrych_digest = (
+            "Львівщина:\n"
+            "Реактивний БпЛА курсом на Поморяни\n\n"
+            "Хмельниччина:\n"
+            "Реактивний БпЛА курсом на Смотрич\n\n"
+            "Тернопільщина:\n"
+            "Реактивний БпЛА курсом на Микулинці\n\n"
+            "Київщина:\n"
+            "Реактивний БпЛА маневрує над Києвом"
+        )
+        p_smotrych = RawPost("kudy_letyt", 305, smotrych_digest, t_smotrych)
+        parsed_sm = self.normalizer.parse(p_smotrych)
+        self.assertEqual(parsed_sm.action, ActionType.DIVERTED)
+        alerts_sm = self.tracker.process_message(p_smotrych, parsed_sm, now=t_smotrych)
+        self.assertEqual(len(alerts_sm), 1)
+        self.assertEqual(alerts_sm[0].title, "Ціль змінила курс")
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
