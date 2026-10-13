@@ -49,6 +49,8 @@ class ParsedMessage:
     is_new_target_marker: bool = False  # True if text explicitly mentions another/new target (e.g. ще один)
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
+    divert_destination: str | None = None
+    target_type: str | None = None
     raw_text: str = ""
 
 
@@ -58,6 +60,7 @@ class Target:
     id: str
     points_sequence: list[str] = field(default_factory=list)  # sequence of points that the target passed
     last_point_id: str = ""
+    target_type: str | None = None
     target_count: int = 1
     status: TargetStatus = TargetStatus.ACTIVE
     first_seen_utc: datetime = field(default_factory=datetime.utcnow)

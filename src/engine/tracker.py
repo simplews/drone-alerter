@@ -169,6 +169,7 @@ class TargetTracker:
                     id=target_id,
                     points_sequence=[point_id],
                     last_point_id=point_id,
+                    target_type=parsed.target_type,
                     target_count=parsed.count,
                     status=TargetStatus.ACTIVE,
                     first_seen_utc=post.posted_at_utc,
@@ -182,6 +183,9 @@ class TargetTracker:
                 # Update the existing target
                 if point_id not in target.points_sequence:
                     target.points_sequence.append(point_id)
+
+                if parsed.target_type:
+                    target.target_type = parsed.target_type
 
                 # Keep target.last_point_id monotonic (closest to protected city)
                 curr_last_pt = ref.points.get(target.last_point_id)
@@ -336,15 +340,17 @@ class TargetTracker:
 
         elif parsed.action == ActionType.DIVERTED:
             target.status = TargetStatus.DIVERTED
+            dest_str = f" на {parsed.divert_destination}" if parsed.divert_destination else ""
             if self._is_siren_active_fn():
                 body = (
-                    f"↗️ Ціль у районі {point_name} змінила курс і прямує в іншому напрямку. "
+                    f"↗️ Ціль у районі {point_name} відвернула{dest_str}. "
                     f"Залишайтеся в укриттях до оголошення відбою."
                 )
             else:
                 body = (
-                    "↗️ Ціль змінила курс у напрямку іншої області. "
-                    "Слідкуйте за офіційними повідомленнями."
+                    f"↗️ Ціль у районі {point_name} відвернула{dest_str}. "
+                    "Слідкуйте за офіційними повідомленнями і не ігноруйте сигнали "
+                    "повітряної тривоги, якщо її все ж буде оголошено."
                 )
             alerts.append(AlertEvent(
                 target_id=target.id,
@@ -376,23 +382,25 @@ class TargetTracker:
             for ch, mid in target.message_ids[-2:]:
                 source_links.append((ch, f"https://t.me/{ch}/{mid}"))
 
+        type_suffix = f" ({target.target_type})" if target.target_type else ""
+
         if target.level == AlertLevel.LEVEL_1:
-            title = f"🟡 {count_prefix}Потенційна загроза: {point_display}"
+            title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"
             body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = True
 
         elif target.level == AlertLevel.LEVEL_2:
-            title = f"🟠 {count_prefix}Наближення: {point_display}"
+            title = f"🟠 {count_prefix}Наближення{type_suffix}: {point_display}"
             body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = False
 
         elif target.level == AlertLevel.LEVEL_3A:
-            title = f"🔴 {count_prefix}Небезпека (підліт): {point_display}"
+            title = f"🔴 {count_prefix}Небезпека (підліт){type_suffix}: {point_display}"
             body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = False
 
         else:  # LEVEL_3B
-            title = f"🔴 {count_prefix}Небезпека біля / над містом: {point_display}"
+            title = f"🔴 {count_prefix}Небезпека біля / над містом{type_suffix}: {point_display}"
             body = "❗️ Ціль безпосередньо біля або над містом зараз! Перебувайте в безпечних місцях."
             is_silent = False
 

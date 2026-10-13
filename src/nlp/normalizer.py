@@ -56,7 +56,71 @@ class MessageNormalizer:
         return self._ref_cache.get()
 
     @staticmethod
-    def _has_divert_phrase(line_norm: str, cancel_keywords: list[str]) -> bool:
+    def _extract_divert_destination(line_norm: str, cancel_keywords: list[str]) -> str | None:
+        """Extract destination or cardinal direction the target diverted to."""
+        # 1. Check known cancel/divert keywords from profile that start with "на " or "повз "
+        # Sort by length descending to match more specific phrases first (e.g. "на стару синяву" before "на синяву")
+        kw_candidates = [
+            kw.strip() for kw in cancel_keywords
+            if kw.lower().startswith(("на ", "повз "))
+        ]
+        kw_candidates.sort(key=len, reverse=True)
+        for kw in kw_candidates:
+            if re.search(rf"(?i)\b{re.escape(kw)}\b", line_norm):
+                # Clean prefix "на " or "повз "
+                dest = re.sub(r"^(?:на|повз)\s+", "", kw, flags=re.IGNORECASE).strip()
+                if dest:
+                    return dest.capitalize()
+
+        # 2. Check cardinal directions and general targets from regex
+        cardinal_match = re.search(
+            r"(?i)\b(?:курсом\s+на|напрямком\s+на|у\s+напрямку|в\s+напрямку|на|в\s+бік|у\s+бік)\s+"
+            r"(північ\w*|південь\w*|схід\w*|захід\w*|рівненщин\w*|рівне\w*|волин\w*|житомир\w*|хмельницьк\w*|тернопіль\w*|львів\w*)\b",
+            line_norm,
+        )
+        if cardinal_match:
+            return cardinal_match.group(1).capitalize()
+
+        # 3. Check general pattern "відвернув(-ла/-ли) на <слово>" або "курсом на <слово>"
+        general_match = re.search(
+            r"(?i)\b(?:відверну\w*|змінил\w*\s+курс|курсом)\s+(?:на|в\s+бік|у\s+бік)\s+([а-яґєії'-]{3,})\b",
+            line_norm,
+        )
+        if general_match:
+            dest = general_match.group(1).strip()
+            # Ignore stop/generic words
+            if dest.lower() not in ("нас", "наш", "напрямок", "інший", "іншу", "іншому"):
+                return dest.capitalize()
+
+        return None
+
+    @staticmethod
+    def _extract_target_type(text: str) -> str | None:
+        """Extract explicit target type name if mentioned in the message text."""
+        norm = normalize(text)
+        # Check patterns from specific to general
+        if re.search(r"(?i)\b(шахед-238|shahed-238)\b", norm):
+            return "Шахед-238"
+        if re.search(r"(?i)\b(геран-3|герань-3)\b", norm):
+            return "Герань-3"
+        if re.search(r"(?i)\b(реактивн\w*\s+бпла)\b", norm):
+            return "реактивний БпЛА"
+        if re.search(r"(?i)\b(реактивн\w*\s+шахед\w*)\b", norm):
+            return "реактивний шахед"
+        if re.search(r"(?i)\b(реактивн\w*\s+геран\w*)\b", norm):
+            return "реактивна герань"
+        if re.search(r"(?i)\b(джет\w*|jet)\b", norm):
+            return "джет"
+        if re.search(r"(?i)\b(бпла|бпЛА)\b", norm):
+            return "БпЛА"
+        if re.search(r"(?i)\b(шахед\w*)\b", norm):
+            return "шахед"
+        if re.search(r"(?i)\b(геран\w*)\b", norm):
+            return "герань"
+        return None
+
+    @classmethod
+    def _has_divert_phrase(cls, line_norm: str, cancel_keywords: list[str]) -> bool:
         if _DIVERTED_RE.search(line_norm):
             return True
         return any(
@@ -91,6 +155,7 @@ class MessageNormalizer:
         points_found: list[str] = []
         divert_detected = False
         divert_point_id: str | None = None
+        divert_destination: str | None = None
         downed_detected = False
         lost_detected = False
         explosion_detected = False
@@ -142,6 +207,8 @@ class MessageNormalizer:
                 divert_detected = True
                 if divert_point_id is None:
                     divert_point_id = line_points[0]
+                if divert_destination is None:
+                    divert_destination = self._extract_divert_destination(line_norm, ref.cancel_keywords)
             elif line_points:
                 for pid in line_points:
                     if pid not in points_found:
@@ -149,6 +216,8 @@ class MessageNormalizer:
                 relevant_lines.append(line_strip)
             elif line_has_divert:
                 divert_detected = True
+                if divert_destination is None:
+                    divert_destination = self._extract_divert_destination(line_norm, ref.cancel_keywords)
 
             if _DOWNED_RE.search(line_norm):
                 downed_detected = True
@@ -194,6 +263,7 @@ class MessageNormalizer:
         # Bind the action to the first found point or diverted point
         action_point = points_found[0] if points_found else divert_point_id
         is_new_target_marker = bool(_ANOTHER_TARGET_RE.search(norm_text))
+        target_type = self._extract_target_type(search_target_text)
 
         return ParsedMessage(
             is_jet=is_jet,
@@ -203,6 +273,8 @@ class MessageNormalizer:
             is_new_target_marker=is_new_target_marker,
             action=action,
             action_point_id=action_point,
+            divert_destination=divert_destination,
+            target_type=target_type,
             raw_text=text,
         )
 

@@ -92,6 +92,26 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed2 = self.normalizer.parse(post2)
         self.assertFalse(parsed2.is_new_target_marker)
 
+    def test_divert_destination_extraction(self):
+        # 1. Destination from cancel keywords
+        p1 = RawPost("chan_a", 40, "Реактивний БпЛА на Закупне", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.action, ActionType.DIVERTED)
+        self.assertEqual(parsed1.divert_destination, "Закупне")
+
+        # 2. Destination from cardinal direction
+        p2 = RawPost("chan_a", 41, "Ціль відвернула на північ", T0)
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.action, ActionType.DIVERTED)
+        self.assertEqual(parsed2.divert_destination, "Північ")
+
+        # 3. Passing corridor point with destination
+        p3 = RawPost("chan_a", 42, "Реактивний БпЛА курсом на Городок повз Дунаївці", T0)
+        parsed3 = self.normalizer.parse(p3)
+        self.assertEqual(parsed3.action, ActionType.DIVERTED)
+        self.assertEqual(parsed3.action_point_id, "dunaivtsi")
+        self.assertEqual(parsed3.divert_destination, "Городок")
+
 
 if __name__ == "__main__":
     unittest.main()
