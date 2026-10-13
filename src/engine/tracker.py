@@ -288,10 +288,19 @@ class TargetTracker:
             target = self._find_matching_target(parsed.action_point_id, post.posted_at_utc)
 
         if target is None and self._active_targets:
-            # Take the most recent active target
+            # Take the most recent active target, but ensure compatibility
             active = self.get_active_targets()
             if active:
-                target = max(active, key=lambda t: t.last_seen_utc)
+                candidate = max(active, key=lambda t: t.last_seen_utc)
+                # If this is a DIVERTED action without explicit action_point_id,
+                # ensure the post does not describe a distant track far from candidate's location.
+                if parsed.action == ActionType.DIVERTED:
+                    time_diff = abs(post.posted_at_utc - candidate.last_seen_utc)
+                    # Gap between the last seen point and divert mention must be within plausible track window
+                    if time_diff <= self._max_gap:
+                        target = candidate
+                else:
+                    target = candidate
 
         if target is None:
             return alerts

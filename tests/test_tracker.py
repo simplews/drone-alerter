@@ -216,6 +216,25 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alerts[0].title, "Ціль змінила курс")
         self.assertEqual(len(self.tracker.get_active_targets()), 0)
 
+    def test_unrelated_distant_post_does_not_divert_active_target(self):
+        # 1. Active target at Pishchanka (Level 1, south Vinnytsia corridor)
+        p1 = RawPost("chan_a", 1, "Реактивний БпЛА курсом на Піщанку", T0)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "pishchanka")
+
+        # 2. Next post 1 minute later from kpszsu reports unrelated target over Zhytomyr region / Berdychiv
+        p2 = RawPost("kpszsu", 86185, "🏍 Реактивний БпЛА на Житомирщині, курс Бердичів", T0 + timedelta(minutes=1))
+        parsed2 = self.normalizer.parse(p2)
+        alerts2 = self.tracker.process_message(p2, parsed2, now=T0 + timedelta(minutes=1))
+
+        # Must NOT emit divert alert or divert the target at Pishchanka
+        self.assertEqual(len(alerts2), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].status, TargetStatus.ACTIVE)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "pishchanka")
+
     def test_multi_channel_lag_deduplication(self):
         """Replicate the real attack episode:
         - 20:19: kudy_letyt -> Nova Ushytsia

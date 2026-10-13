@@ -34,7 +34,7 @@ _ANOTHER_TARGET_RE = re.compile(
 _DISTANT_REGION_RE = re.compile(
     r"(?i)\b(брянськ|брянщин|чернігів|сумщин|сумськ|харків|полтав|дніпропетров|запоріж|"
     r"херсон|миколаїв|одещин|одеськ|кіровоград|черкащин|черкаськ|донецьк|луганськ|крим|"
-    r"київщин|київськ|вишгород|бровар|дарниц|дврз|чорнобил|славутич)\w*"
+    r"київщин|київськ|вишгород|бровар|дарниц|дврз|чорнобил|славутич|житомир|бердичів)\w*"
 )
 
 # Approach / western regions relevant to the corridor
@@ -55,8 +55,21 @@ class MessageNormalizer:
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
 
-    @staticmethod
-    def _extract_divert_destination(line_norm: str, cancel_keywords: list[str]) -> str | None:
+    @classmethod
+    def _normalize_divert_dest(cls, dest: str) -> str:
+        """Ensure destination is capitalized and inflected into accusative case if needed."""
+        dest = dest.strip()
+        if not dest:
+            return ""
+        # Handle locative region endings (-щині, -ччині -> -щину, -ччину)
+        if re.search(r"(?i)ччині$", dest):
+            dest = re.sub(r"(?i)ччині$", "ччину", dest)
+        elif re.search(r"(?i)щині$", dest):
+            dest = re.sub(r"(?i)щині$", "щину", dest)
+        return dest.capitalize()
+
+    @classmethod
+    def _extract_divert_destination(cls, line_norm: str, cancel_keywords: list[str]) -> str | None:
         """Extract destination or cardinal direction the target diverted to."""
         # 1. Check known cancel/divert keywords from profile that start with "на " or "повз "
         # Sort by length descending to match more specific phrases first (e.g. "на стару синяву" before "на синяву")
@@ -70,7 +83,7 @@ class MessageNormalizer:
                 # Clean prefix "на " or "повз "
                 dest = re.sub(r"^(?:на|повз)\s+", "", kw, flags=re.IGNORECASE).strip()
                 if dest:
-                    return dest.capitalize()
+                    return cls._normalize_divert_dest(dest)
 
         # 2. Check cardinal directions and general targets from regex
         cardinal_match = re.search(
@@ -79,7 +92,7 @@ class MessageNormalizer:
             line_norm,
         )
         if cardinal_match:
-            return cardinal_match.group(1).capitalize()
+            return cls._normalize_divert_dest(cardinal_match.group(1))
 
         # 3. Check general pattern "відвернув(-ла/-ли) на <слово>" або "курсом на <слово>"
         general_match = re.search(
@@ -90,7 +103,7 @@ class MessageNormalizer:
             dest = general_match.group(1).strip()
             # Ignore stop/generic words
             if dest.lower() not in ("нас", "наш", "напрямок", "інший", "іншу", "іншому"):
-                return dest.capitalize()
+                return cls._normalize_divert_dest(dest)
 
         return None
 
@@ -183,6 +196,10 @@ class MessageNormalizer:
             if line_strip.endswith(":") and has_corridor_reg:
                 in_distant_section = False
 
+            # Completely ignore lines inside distant region sections or lines mentioning distant regions without corridor regions
+            if in_distant_section or (has_distant and not has_corridor_reg):
+                continue
+
             # Find corridor points on this specific line
             line_points: list[str] = []
             line_spans: list[tuple[int, int]] = []
@@ -195,9 +212,9 @@ class MessageNormalizer:
                         if pid not in line_points:
                             line_points.append(pid)
 
-            # Ignore lines that belong to distant regions unless they explicitly mention a corridor point
-            if (in_distant_section or (has_distant and not has_corridor_reg)) and not line_points:
-                continue
+            # If line mentions distant areas without corridor points,
+            # it should not trigger actions (divert/downed/lost) for corridor targets
+            is_corridor_line = bool(line_points or has_corridor_reg)
 
             line_has_divert = self._has_divert_phrase(line_norm, ref.cancel_keywords)
 
@@ -214,18 +231,18 @@ class MessageNormalizer:
                     if pid not in points_found:
                         points_found.append(pid)
                 relevant_lines.append(line_strip)
-            elif line_has_divert:
+            elif line_has_divert and (is_corridor_line or not has_distant):
                 divert_detected = True
                 if divert_destination is None:
                     divert_destination = self._extract_divert_destination(line_norm, ref.cancel_keywords)
 
-            if _DOWNED_RE.search(line_norm):
+            if _DOWNED_RE.search(line_norm) and (is_corridor_line or not has_distant):
                 downed_detected = True
-            elif _LOST_RE.search(line_norm):
+            elif _LOST_RE.search(line_norm) and (is_corridor_line or not has_distant):
                 lost_detected = True
-            elif _EXPLOSION_RE.search(line_norm):
+            elif _EXPLOSION_RE.search(line_norm) and (is_corridor_line or not has_distant):
                 explosion_detected = True
-            elif _CLEAR_RE.search(line_norm):
+            elif _CLEAR_RE.search(line_norm) and (is_corridor_line or not has_distant):
                 clear_detected = True
 
         # 4. Determine overall action
