@@ -141,13 +141,37 @@ class TestTargetTracker(unittest.TestCase):
         self.assertIn("Ціль у районі Нова Ушиця відвернула на Північ", alerts2[0].body)
         self.assertIn("Залишайтеся в укриттях до оголошення відбою", alerts2[0].body)
 
-        # 3. Divert to Murovani-Kurylivtsi
+        # 3. Divert to Peremyshliany
         p3 = RawPost("chan_a", 5, "Реактивна герань на Нову Ушицю", T0 + timedelta(minutes=20))
         tracker_siren.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=20))
-        p_div3 = RawPost("chan_a", 6, "Ціль відвернула на Муровані-Курилівці", T0 + timedelta(minutes=25))
+        p_div3 = RawPost("chan_a", 6, "Ціль відвернула на Перемишляни", T0 + timedelta(minutes=25))
         alerts3 = tracker_siren.process_message(p_div3, self.normalizer.parse(p_div3), now=T0 + timedelta(minutes=25))
         self.assertEqual(len(alerts3), 1)
-        self.assertIn("Ціль у районі Нова Ушиця відвернула на Муровані Кирилівці", alerts3[0].body)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Перемишляни", alerts3[0].body)
+
+    def test_vendychany_to_murovani_kyrylivtsi_advances_target_without_divert(self):
+        # User scenario: Vendychany (225 km) -> Murovani Kyrylivtsi (205 km)
+        # Target is moving along the corridor towards Ivano-Frankivsk and MUST NOT trigger divert!
+        p1 = RawPost("kudy_letyt", 101, "Реактивна герань на Вендичани", T0)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Вендичани", alerts1[0].title)
+
+        # 5 minutes later: post says target is now at / heading to Murovani Kyrylivtsi
+        p2 = RawPost("monitoring_zaxid", 102, "Ціль у районі н.п. Муровані Курилівці", T0 + timedelta(minutes=5))
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.action, ActionType.NONE)
+        self.assertEqual(parsed2.points, ["murovani_kyrylivtsi"])
+
+        alerts2 = self.tracker.process_message(p2, parsed2, now=T0 + timedelta(minutes=5))
+        targets = self.tracker.get_active_targets()
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0].last_point_id, "murovani_kyrylivtsi")
+        # Ensure no divert alert was generated
+        for a in alerts2:
+            self.assertNotEqual(a.title, "Ціль змінила курс")
+
 
 
     def test_level_1_target_eta_timeout_marked_lost(self):

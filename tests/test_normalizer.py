@@ -117,11 +117,20 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed4 = self.normalizer.parse(p4)
         self.assertEqual(parsed4.divert_destination, "Рівненщину")
 
-        # 5. Compound place name with hyphen and custom spelling override
-        p5 = RawPost("chan_a", 44, "Реактивний БпЛА на Муровані-Курилівці", T0)
+        # 5. Compound place name divert destination
+        p5 = RawPost("chan_a", 44, "Реактивний БпЛА на Перемишляни", T0)
         parsed5 = self.normalizer.parse(p5)
         self.assertEqual(parsed5.action, ActionType.DIVERTED)
-        self.assertEqual(parsed5.divert_destination, "Муровані Кирилівці")
+        self.assertEqual(parsed5.divert_destination, "Перемишляни")
+
+    def test_murovani_kyrylivtsi_is_corridor_point_not_divert(self):
+        # Murovani Kyrylivtsi is in the corridor between Vendychany and Nova Ushytsia.
+        # It must NOT trigger ActionType.DIVERTED.
+        p = RawPost("chan_a", 50, "Реактивний БпЛА на Муровані-Курилівці", T0)
+        parsed = self.normalizer.parse(p)
+        self.assertEqual(parsed.action, ActionType.NONE)
+        self.assertEqual(parsed.points, ["murovani_kyrylivtsi"])
+
 
 
     def test_distant_region_does_not_trigger_divert_action(self):

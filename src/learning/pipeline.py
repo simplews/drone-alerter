@@ -70,9 +70,21 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
     # 2. Distances and speed of the jet drones.
     from .reference import seed_from_profile
     seed_points = seed_from_profile().points
-    for pid, point in cand.points.items():
-        if point.distance_km is None and pid in seed_points:
-            point.distance_km = seed_points[pid].distance_km
+    for pid, sp in seed_points.items():
+        if pid not in cand.points:
+            cand.points[pid] = PointRef(
+                id=pid,
+                names=list(sp.names),
+                level=sp.level,
+                distance_km=sp.distance_km,
+                eta_min=sp.eta_min,
+                eta_max=sp.eta_max,
+                eta_method="prior",
+            )
+            log.append(f"Новий пункт з профілю {pid} (рівень {sp.level})")
+        elif cand.points[pid].distance_km is None:
+            cand.points[pid].distance_km = sp.distance_km
+
 
     cand.post_lag_min = [0.5, 1.5]
     speed = fit_speed(observations, cand.points, cfg)

@@ -190,12 +190,25 @@ class ActiveReferenceCache:
                 for kw in profile.target_keywords:
                     if kw not in ref.target_keywords:
                         ref.target_keywords.append(kw)
-                for kw in profile.cancel_keywords:
-                    if kw not in ref.cancel_keywords:
-                        ref.cancel_keywords.append(kw)
+                if profile.cancel_keywords:
+                    ref.cancel_keywords = list(profile.cancel_keywords)
                 for sw in profile.stopwords:
                     if sw not in ref.stopwords:
                         ref.stopwords.append(sw)
+                for item in profile.points:
+                    pid = item["id"]
+                    if pid not in ref.points:
+                        eta_min, eta_max = item.get("eta_min"), item.get("eta_max")
+                        has_eta = eta_min is not None
+                        ref.points[pid] = PointRef(
+                            id=pid,
+                            names=list(item["names"]),
+                            level=item["level"],
+                            distance_km=item.get("distance_km"),
+                            eta_min=float(eta_min) if has_eta else None,
+                            eta_max=float(eta_max) if has_eta else None,
+                            eta_method="profile_seed" if has_eta else "none",
+                        )
             except Exception:  # noqa: BLE001, S110
                 pass
             self._ref = ref
