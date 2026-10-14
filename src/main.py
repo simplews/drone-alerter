@@ -28,6 +28,7 @@ from src.telegram.bot import (
     broadcast_siren_event,
     broadcast_system_warning,
     create_bot_dispatcher,
+    setup_bot_commands,
 )
 from src.telegram.listener import TelegramChannelListener
 from src.utils.time import now_kyiv
@@ -204,7 +205,9 @@ class Application:
 
         # Start the bot in the background
         if self.bot and self.bot_dp:
+            await setup_bot_commands(self.bot)
             tasks.append(asyncio.create_task(self.bot_dp.start_polling(self.bot)))
+
 
         # Wait for completion
         await self.stop_event.wait()

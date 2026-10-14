@@ -41,6 +41,33 @@ def normalize(text: str) -> str:
     return _SPACES.sub(" ", text).strip()
 
 
+def format_place_title(text: str) -> str:
+    """Format a place name with proper Ukrainian title casing and hyphen handling.
+
+    Capitalizes each word and each component of hyphenated names, respecting apostrophes
+    and specific irregular multi-word Ukrainian toponyms (e.g. 'Муровані Кирилівці').
+    """
+    text = text.replace("_", " ").strip()
+    if not text:
+        return ""
+    text = _APOSTROPHES.sub("ʼ", text)
+    norm_l = text.lower().replace("-", " ")
+    if "мурован" in norm_l and ("курил" in norm_l or "кирил" in norm_l):
+        if norm_l.endswith(("цях", "цях ")):
+            return "Мурованих Кирилівцях"
+        elif norm_l.endswith(("ців", "ців ")):
+            return "Мурованих Кирилівців"
+        return "Муровані Кирилівці"
+
+    words = text.split()
+    formatted_words = []
+    for word in words:
+        parts = word.split("-")
+        formatted_parts = [p[:1].upper() + p[1:] if p else "" for p in parts]
+        formatted_words.append("-".join(formatted_parts))
+    return " ".join(formatted_words)
+
+
 def stem_word(word: str) -> str:
     for ending in _ENDINGS:
         if word.endswith(ending) and len(word) - len(ending) >= _MIN_STEM:

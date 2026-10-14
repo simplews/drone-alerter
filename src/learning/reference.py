@@ -50,6 +50,7 @@ class ReferenceData:
     status: str = STATUS_PENDING
     points: dict[str, PointRef] = field(default_factory=dict)
     speed_kmh: list[float] = field(default_factory=lambda: [400.0, 480.0])
+    conventional_speed_kmh: list[float] = field(default_factory=lambda: [150.0, 185.0])
     # Publication time noise (minutes). It covers the delay of the first mention and
     # of the arrival message.
     post_lag_min: list[float] = field(default_factory=lambda: [0.5, 1.5])
@@ -187,15 +188,30 @@ class ActiveReferenceCache:
             ref = self._repo.active()
             try:
                 profile = get_profile()
+                if hasattr(profile, "conventional_speed_kmh") and profile.conventional_speed_kmh:
+                    ref.conventional_speed_kmh = list(profile.conventional_speed_kmh)
                 for kw in profile.target_keywords:
                     if kw not in ref.target_keywords:
                         ref.target_keywords.append(kw)
-                for kw in profile.cancel_keywords:
-                    if kw not in ref.cancel_keywords:
-                        ref.cancel_keywords.append(kw)
+                if profile.cancel_keywords:
+                    ref.cancel_keywords = list(profile.cancel_keywords)
                 for sw in profile.stopwords:
                     if sw not in ref.stopwords:
                         ref.stopwords.append(sw)
+                for item in profile.points:
+                    pid = item["id"]
+                    if pid not in ref.points:
+                        eta_min, eta_max = item.get("eta_min"), item.get("eta_max")
+                        has_eta = eta_min is not None
+                        ref.points[pid] = PointRef(
+                            id=pid,
+                            names=list(item["names"]),
+                            level=item["level"],
+                            distance_km=item.get("distance_km"),
+                            eta_min=float(eta_min) if has_eta else None,
+                            eta_max=float(eta_max) if has_eta else None,
+                            eta_method="profile_seed" if has_eta else "none",
+                        )
             except Exception:  # noqa: BLE001, S110
                 pass
             self._ref = ref
@@ -222,6 +238,7 @@ def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
     return ReferenceData(
         points=points,
         speed_kmh=list(profile.speed_kmh),
+        conventional_speed_kmh=list(getattr(profile, "conventional_speed_kmh", [150.0, 185.0])),
         post_lag_min=list(profile.post_lag_min),
         target_keywords=list(profile.target_keywords),
         cancel_keywords=list(profile.cancel_keywords),

@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from src.engine.models import ActionType, AlertLevel, RawPost, TargetStatus
+from src.engine.models import ActionType, AlertLevel, DroneType, RawPost, TargetStatus
 from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
@@ -37,7 +37,7 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
         self.assertTrue(alerts1[0].is_silent)
-        self.assertEqual(alerts1[0].title, "🟡 Потенційна загроза (реактивна герань): Нова ушиця")
+        self.assertEqual(alerts1[0].title, "🟡 Потенційна загроза (реактивна герань): Нова Ушиця")
 
         # 2. Borshchiv (level 2, loud) - inherits target_type from earlier post
         t2 = T0 + timedelta(minutes=10)
@@ -73,6 +73,8 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0].level, AlertLevel.LEVEL_2)
         self.assertFalse(alerts[0].is_silent)
+        self.assertEqual(alerts[0].title, "🟠 Наближення (реактивна герань): Камʼянець-Подільський")
+
 
     def test_multi_target_decrement_on_downed(self):
         # 2 targets to Tlumach
@@ -124,7 +126,7 @@ class TestTargetTracker(unittest.TestCase):
         alerts1 = tracker_no_siren.process_message(p_div1, self.normalizer.parse(p_div1), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].title, "Ціль змінила курс")
-        self.assertIn("Ціль у районі Нова ушиця відвернула на Хмельницького", alerts1[0].body)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Хмельницького", alerts1[0].body)
         self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її все ж буде оголошено", alerts1[0].body)
 
         # 2. Divert with active siren
@@ -136,8 +138,41 @@ class TestTargetTracker(unittest.TestCase):
         alerts2 = tracker_siren.process_message(p_div2, self.normalizer.parse(p_div2), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts2), 1)
         self.assertEqual(alerts2[0].title, "Ціль змінила курс")
-        self.assertIn("Ціль у районі Нова ушиця відвернула на Північ", alerts2[0].body)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Північ", alerts2[0].body)
         self.assertIn("Залишайтеся в укриттях до оголошення відбою", alerts2[0].body)
+
+        # 3. Divert to Peremyshliany
+        p3 = RawPost("chan_a", 5, "Реактивна герань на Нову Ушицю", T0 + timedelta(minutes=20))
+        tracker_siren.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=20))
+        p_div3 = RawPost("chan_a", 6, "Ціль відвернула на Перемишляни", T0 + timedelta(minutes=25))
+        alerts3 = tracker_siren.process_message(p_div3, self.normalizer.parse(p_div3), now=T0 + timedelta(minutes=25))
+        self.assertEqual(len(alerts3), 1)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Перемишляни", alerts3[0].body)
+
+    def test_vendychany_to_murovani_kyrylivtsi_advances_target_without_divert(self):
+        # User scenario: Vendychany (225 km) -> Murovani Kyrylivtsi (205 km)
+        # Target is moving along the corridor towards Ivano-Frankivsk and MUST NOT trigger divert!
+        p1 = RawPost("kudy_letyt", 101, "Реактивна герань на Вендичани", T0)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Вендичани", alerts1[0].title)
+
+        # 5 minutes later: post says target is now at / heading to Murovani Kyrylivtsi
+        p2 = RawPost("monitoring_zaxid", 102, "Ціль у районі н.п. Муровані Курилівці", T0 + timedelta(minutes=5))
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.action, ActionType.NONE)
+        self.assertEqual(parsed2.points, ["murovani_kyrylivtsi"])
+
+        alerts2 = self.tracker.process_message(p2, parsed2, now=T0 + timedelta(minutes=5))
+        targets = self.tracker.get_active_targets()
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0].last_point_id, "murovani_kyrylivtsi")
+        # Ensure no divert alert was generated
+        for a in alerts2:
+            self.assertNotEqual(a.title, "Ціль змінила курс")
+
+
 
     def test_level_1_target_eta_timeout_marked_lost(self):
         store = LearningStore(":memory:")
@@ -355,6 +390,73 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts_sm), 1)
         self.assertEqual(alerts_sm[0].title, "Ціль змінила курс")
         self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_level_3b_target_isolation_and_divert_matching(self):
+        """Case: Target 1 reaches Tysmenytsia (Level 3B).
+        Target 2 moves Vendychany -> Nova Ushytsia -> Dunaivtsi.
+        A divert post at Dunaivtsi must divert Target 2 (Dunaivtsi), NOT Target 1 (Tysmenytsia).
+        """
+        # Target 1: Nova Ushytsia -> Tysmenytsia
+        t1_start = datetime(2026, 10, 14, 14, 40, 0, tzinfo=UTC)
+        p1 = RawPost("kudy_letyt", 401, "Реактивний БпЛА на Нову Ушицю", t1_start)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1_start)
+
+        t1_tys = datetime(2026, 10, 14, 15, 7, 22, tzinfo=UTC)
+        p1_tys = RawPost("monitoring_zaxid", 402, "Уже проходить Тлумач, наближається ближче до Тисмениці", t1_tys)
+        alerts_tys = self.tracker.process_message(p1_tys, self.normalizer.parse(p1_tys), now=t1_tys)
+        self.assertTrue(any(a.level == AlertLevel.LEVEL_3B for a in alerts_tys))
+
+        # Target 2: Vendychany at 15:08:32
+        t2_ven = datetime(2026, 10, 14, 15, 8, 32, tzinfo=UTC)
+        p2_ven = RawPost("kpszsu", 403, "Реактивний БпЛА повз Вендичани на Вінниччині ➡️ у напрямку Хмельниччини", t2_ven)
+        self.tracker.process_message(p2_ven, self.normalizer.parse(p2_ven), now=t2_ven)
+
+        # Target 2 moves to Nova Ushytsia & Dunaivtsi at 15:16:24
+        t2_dun = datetime(2026, 10, 14, 15, 16, 24, tzinfo=UTC)
+        p2_dun = RawPost("kudy_letyt", 404, "Хмельниччина:\nРеактивний БпЛА повз Нову Ушицю в бік Дунаївців", t2_dun)
+        self.tracker.process_message(p2_dun, self.normalizer.parse(p2_dun), now=t2_dun)
+
+        # Divert post at Dunaivtsi towards Horodok at 15:24:41
+        t_div = datetime(2026, 10, 14, 15, 24, 41, tzinfo=UTC)
+        p_div = RawPost("kudy_letyt", 405, "Хмельниччина:\nРеактивний БпЛА повз Дунаївці курсом на Городок", t_div)
+        alerts_div = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_div)
+
+        self.assertEqual(len(alerts_div), 1)
+        self.assertEqual(alerts_div[0].title, "Ціль змінила курс")
+        self.assertIn("Дунаївці", alerts_div[0].body)
+        self.assertIn("Городок", alerts_div[0].body)
+        self.assertNotIn("Тисмениця", alerts_div[0].body)
+
+    def test_conventional_shahed_eta_and_title(self):
+        # Conventional Shahed reported at Nova Ushytsia (187 km)
+        p1 = RawPost("chan_a", 501, "Шахед на Нову Ушицю", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.drone_type, DroneType.CONVENTIONAL)
+
+        alerts = self.tracker.process_message(p1, parsed1, now=T0)
+        self.assertEqual(len(alerts), 1)
+        # Verify title formatted as (Шахед)
+        self.assertEqual(alerts[0].title, "🟡 Потенційна загроза (Шахед): Нова Ушиця")
+        # Verify ETA is around 59–76 min (NOT 26–33 min)
+        target = self.tracker.get_active_targets()[0]
+        self.assertEqual(target.drone_type, DroneType.CONVENTIONAL)
+        self.assertGreaterEqual(target.eta_min_minutes, 55.0)
+        self.assertLessEqual(target.eta_max_minutes, 80.0)
+
+    def test_jet_and_conventional_concurrent_isolation(self):
+        # 1. Jet drone at Nova Ushytsia
+        p_jet = RawPost("chan_a", 601, "Реактивна герань на Нову Ушицю", T0)
+        self.tracker.process_message(p_jet, self.normalizer.parse(p_jet), now=T0)
+
+        # 2. Conventional Shahed also at Nova Ushytsia (different speed, different wave)
+        p_conv = RawPost("chan_b", 602, "Шахед на Нову Ушицю", T0 + timedelta(minutes=1))
+        self.tracker.process_message(p_conv, self.normalizer.parse(p_conv), now=T0 + timedelta(minutes=1))
+
+        # Must track as TWO separate targets!
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 2)
+        types = {t.drone_type for t in active}
+        self.assertEqual(types, {DroneType.JET, DroneType.CONVENTIONAL})
 
 
 if __name__ == "__main__":

@@ -4,9 +4,9 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from src.engine.models import ActionType, ParsedMessage, RawPost
+from src.engine.models import ActionType, DroneType, ParsedMessage, RawPost
 from src.learning.reference import ActiveReferenceCache, ReferenceData
-from src.learning.text import normalize
+from src.learning.text import format_place_title, normalize
 
 # Patterns for the number of targets
 _COUNT_PATTERNS = [
@@ -18,6 +18,14 @@ _COUNT_PATTERNS = [
     (re.compile(r"(?i)\bодин\s+реактивн"), lambda _: 1),
     (re.compile(r"(?i)\bодна\s+реактивн"), lambda _: 1),
 ]
+
+# Patterns for conventional / propeller drones
+_CONVENTIONAL_KW_RE = re.compile(
+    r"(?i)\b(шахед-136|shahed-136|геран-2|герань-2|мопед\w*|поршнев\w*|гвинтов\w*|звичайні?\s+шахед\w*|звичайні?\s+бпла)\b"
+)
+_GENERAL_DRONE_RE = re.compile(
+    r"(?i)\b(шахед\w*|геран\w*|бпла)\b"
+)
 
 # Patterns for actions
 _DOWNED_RE = re.compile(r"(?i)\b(збит[оаіи]|збили|уражен[оа]|мінус\s+ціль|знищен[оа])\b")
@@ -51,6 +59,7 @@ class MessageNormalizer:
         self._context_window = timedelta(minutes=context_window_minutes)
         # Last time of a jet target mention for each channel: channel -> datetime
         self._channel_jet_context: dict[str, datetime] = {}
+        self._last_any_jet_time: datetime | None = None
 
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
@@ -66,7 +75,7 @@ class MessageNormalizer:
             dest = re.sub(r"(?i)ччині$", "ччину", dest)
         elif re.search(r"(?i)щині$", dest):
             dest = re.sub(r"(?i)щині$", "щину", dest)
-        return dest.capitalize()
+        return format_place_title(dest)
 
     @classmethod
     def _extract_divert_destination(cls, line_norm: str, cancel_keywords: list[str]) -> str | None:
@@ -124,6 +133,14 @@ class MessageNormalizer:
             return "реактивна герань"
         if re.search(r"(?i)\b(джет\w*|jet)\b", norm):
             return "джет"
+        if re.search(r"(?i)\b(реактивн\w*)\b", norm):
+            return "реактивний"
+        if re.search(r"(?i)\b(шахед-136|shahed-136)\b", norm):
+            return "Шахед-136"
+        if re.search(r"(?i)\b(геран-2|герань-2)\b", norm):
+            return "Герань-2"
+        if re.search(r"(?i)\b(мопед\w*)\b", norm):
+            return "мопед"
         if re.search(r"(?i)\b(бпла|бпЛА)\b", norm):
             return "БпЛА"
         if re.search(r"(?i)\b(шахед\w*)\b", norm):
@@ -149,13 +166,15 @@ class MessageNormalizer:
 
         # 1. Check for explicit jet drone keywords
         explicit_jet = any(kw.lower() in norm_text for kw in ref.target_keywords)
+        explicit_conventional = bool(_CONVENTIONAL_KW_RE.search(norm_text))
 
         # 2. Check for context inheritance
         now = post.posted_at_utc
         last_jet_time = self._channel_jet_context.get(post.channel)
-        inherited_jet = False
-        if last_jet_time and (now - last_jet_time) <= self._context_window:
-            inherited_jet = True
+        inherited_jet = bool(
+            (last_jet_time and (now - last_jet_time) <= self._context_window)
+            or (self._last_any_jet_time and (now - self._last_any_jet_time) <= self._context_window)
+        )
 
         # 3. Line-aware analysis for multi-region digests and actions
         alias_index = ref.alias_index()
@@ -273,10 +292,25 @@ class MessageNormalizer:
                 explicit_count = True
                 break
 
-        # If a jet target is confirmed, extend the context window of the channel
-        is_jet = explicit_jet or (inherited_jet and bool(points_found or action != ActionType.NONE))
-        if is_jet:
+        # Determine drone type and context inheritance
+        has_general_drone = bool(_GENERAL_DRONE_RE.search(norm_text))
+        if explicit_jet:
+            drone_type = DroneType.JET
+            is_jet = True
             self._channel_jet_context[post.channel] = now
+            self._last_any_jet_time = now
+        elif explicit_conventional:
+            drone_type = DroneType.CONVENTIONAL
+            is_jet = False
+        elif inherited_jet and not has_general_drone and bool(points_found or action != ActionType.NONE):
+            # Short follow-up along the jet track (e.g. "Дунаївці — курс на захід", "Хриплин")
+            drone_type = DroneType.JET
+            is_jet = True
+            self._channel_jet_context[post.channel] = now
+            self._last_any_jet_time = now
+        else:
+            drone_type = DroneType.CONVENTIONAL
+            is_jet = False
 
         # Bind the action to the first found point or diverted point
         action_point = points_found[0] if points_found else divert_point_id
@@ -292,6 +326,7 @@ class MessageNormalizer:
             action=action,
             action_point_id=action_point,
             divert_destination=divert_destination,
+            drone_type=drone_type,
             target_type=target_type,
             raw_text=text,
         )

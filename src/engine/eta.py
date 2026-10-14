@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from src.engine.models import AlertLevel
+from src.engine.models import AlertLevel, DroneType
 from src.learning.calibration import physics_interval
 from src.learning.reference import PointRef, ReferenceData
 from src.utils.time import format_kyiv_time
@@ -14,6 +14,7 @@ def calculate_eta(
     ref: ReferenceData,
     post_time_utc: datetime,
     current_time_utc: datetime,
+    drone_type: DroneType = DroneType.JET,
 ) -> tuple[float, float, datetime, datetime, str]:
     """Calculate the minimum and maximum approach time (in minutes) and the time window.
 
@@ -23,7 +24,15 @@ def calculate_eta(
     elapsed_minutes = max(0.0, (current_time_utc - post_time_utc).total_seconds() / 60.0)
 
     # 1. Find the base approach range from the point
-    if point.eta_min is not None and point.eta_max is not None:
+    if drone_type == DroneType.CONVENTIONAL:
+        if point.distance_km:
+            conv_speed = getattr(ref, "conventional_speed_kmh", [150.0, 185.0])
+            base_min, base_max = physics_interval(point.distance_km, conv_speed, ref.post_lag_min)
+            base_min = round(base_min)
+            base_max = round(base_max)
+        else:
+            base_min, base_max = 15.0, 45.0
+    elif point.eta_min is not None and point.eta_max is not None:
         base_min = point.eta_min
         base_max = point.eta_max
     elif point.distance_km:
