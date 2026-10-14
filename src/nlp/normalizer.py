@@ -196,8 +196,9 @@ class MessageNormalizer:
             if line_strip.endswith(":") and has_corridor_reg:
                 in_distant_section = False
 
-            # Completely ignore lines inside distant region sections or lines mentioning distant regions without corridor regions
-            if in_distant_section or (has_distant and not has_corridor_reg):
+            # If the current line mentions a distant region (e.g. "в Подільському районі Одещини", "на Одещині", "Чернігівщина:"),
+            # ignore it completely. Even if it says "на Вінниччину (Піщанка)", the drone has not entered the corridor yet.
+            if in_distant_section or has_distant:
                 continue
 
             # Find corridor points on this specific line

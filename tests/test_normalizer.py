@@ -138,6 +138,14 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed = self.normalizer.parse(p)
         self.assertEqual(parsed.points, [])
         self.assertEqual(parsed.action, ActionType.NONE)
+    def test_distant_region_approaching_corridor_is_ignored(self):
+        # Post 86371: drone still in Podilsk district of Odesa region heading towards Vinnytsia/Pishchanka
+        # Must be ignored until drone actually enters Vinnytsia region / Pishchanka
+        text = "🏍 Реактивний БпЛА в Подільському районі Одещини ➡️ на Вінниччину (Піщанка)"
+        p = RawPost("kpszsu", 86371, text, T0)
+        parsed = self.normalizer.parse(p)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
 
 
 if __name__ == "__main__":
