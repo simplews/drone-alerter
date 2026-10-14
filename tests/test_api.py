@@ -35,7 +35,20 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["reference_version"], 1)
         self.assertEqual(data["active_targets_count"], 0)
+        self.assertEqual(data["subscribers_count"], 0)
         self.assertIn("siren_alert_active", data)
+
+        from unittest.mock import MagicMock
+
+        from src.telegram.bot import SubscriberRepository
+
+        mock_subscribers = MagicMock(spec=SubscriberRepository)
+        mock_subscribers.count.return_value = 5
+        set_app_state(tracker=self.tracker, ref_cache=self.cache, subscribers=mock_subscribers)
+
+        resp2 = self.client.get("/health")
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.json()["subscribers_count"], 5)
 
     def test_targets_endpoint_empty(self):
         resp = self.client.get("/targets")

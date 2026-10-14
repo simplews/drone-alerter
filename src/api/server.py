@@ -46,6 +46,7 @@ def healthcheck() -> dict[str, Any]:
     active_targets_count = len(_tracker.get_active_targets()) if _tracker else 0
     ref_version = _ref_cache.get().version if _ref_cache else 0
     is_connected = _listener.is_connected() if _listener else False
+    subscribers_count = _subscribers.count() if _subscribers else 0
 
     siren_state = _siren.get_current_state() if _siren else None
 
@@ -53,6 +54,7 @@ def healthcheck() -> dict[str, Any]:
         "status": "ok",
         "uptime_seconds": int(uptime_seconds),
         "active_targets_count": active_targets_count,
+        "subscribers_count": subscribers_count,
         "reference_version": ref_version,
         "telegram_listener_connected": is_connected,
         "siren_alert_active": siren_state.is_active if siren_state else False,
