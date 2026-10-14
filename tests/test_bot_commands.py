@@ -78,7 +78,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         text = msg.answer.call_args[0][0]
         self.assertIn("Офіційна повітряна тривога:", text)
         self.assertIn("Відбій", text)
-        self.assertIn("Активних реактивних цілей на коридорі не зафіксовано", text)
+        self.assertIn("Активних цілей на коридорі не зафіксовано", text)
 
     async def test_cmd_status_active_target(self):
         handler = self._get_handler("cmd_status")

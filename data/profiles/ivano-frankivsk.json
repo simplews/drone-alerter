@@ -6,6 +6,10 @@
     400.0,
     480.0
   ],
+  "conventional_speed_kmh": [
+    150.0,
+    185.0
+  ],
   "post_lag_min": [
     0.5,
     1.5

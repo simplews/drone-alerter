@@ -50,6 +50,7 @@ class ReferenceData:
     status: str = STATUS_PENDING
     points: dict[str, PointRef] = field(default_factory=dict)
     speed_kmh: list[float] = field(default_factory=lambda: [400.0, 480.0])
+    conventional_speed_kmh: list[float] = field(default_factory=lambda: [150.0, 185.0])
     # Publication time noise (minutes). It covers the delay of the first mention and
     # of the arrival message.
     post_lag_min: list[float] = field(default_factory=lambda: [0.5, 1.5])
@@ -187,6 +188,8 @@ class ActiveReferenceCache:
             ref = self._repo.active()
             try:
                 profile = get_profile()
+                if hasattr(profile, "conventional_speed_kmh") and profile.conventional_speed_kmh:
+                    ref.conventional_speed_kmh = list(profile.conventional_speed_kmh)
                 for kw in profile.target_keywords:
                     if kw not in ref.target_keywords:
                         ref.target_keywords.append(kw)
@@ -235,6 +238,7 @@ def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
     return ReferenceData(
         points=points,
         speed_kmh=list(profile.speed_kmh),
+        conventional_speed_kmh=list(getattr(profile, "conventional_speed_kmh", [150.0, 185.0])),
         post_lag_min=list(profile.post_lag_min),
         target_keywords=list(profile.target_keywords),
         cancel_keywords=list(profile.cancel_keywords),

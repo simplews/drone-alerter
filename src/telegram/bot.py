@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import BotCommand, Message
 
-from src.engine.models import AlertEvent, AlertLevel
+from src.engine.models import AlertEvent, AlertLevel, DroneType
 from src.learning.text import format_place_title
 from src.profile import get_profile
 from src.utils.time import format_kyiv_time, now_kyiv
@@ -89,9 +89,10 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         levels = get_levels_text()
         return (
             "⏱ **ТАБЛИЦЯ РУБЕЖІВ ТА ОРІЄНТОВНИЙ ЧАС ПІДЛЬОТУ (ETA)**\n\n"
-            f"Розраховано для руху реактивних БпЛА в напрямку {texts['city_gen']} "
-            f"вздовж коридору {texts['route_short']}.\n"
-            "Середня швидкість: **450–650 км/год** (близько 7.5–10.8 км/хв) з урахуванням маневрування.\n\n"
+            f"Розраховано для руху БпЛА в напрямку {texts['city_gen']} "
+            f"вздовж коридору {texts['route_short']}.\n\n"
+            "• 🚀 **Реактивні БпЛА (400–480 км/год):** орієнтовні інтервали наведено в таблиці рубежів нижче.\n"
+            "• 🛩 **Звичайні Шахеди (150–185 км/год):** час підльоту довший приблизно у 2.5 рази і розраховується автоматично при виявленні цілі.\n\n"
             f"{levels}\n\n"
             "⚠️ **Безпекове застереження:**\n"
             "Час є математичним орієнтиром. Дрони можуть змінювати курс або бути збиті силами ППО. "
@@ -106,7 +107,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         return (
             "ℹ️ **ЯК ПРАЦЮЄ СИСТЕМА ТА ЯК МИ РАХУЄМО ЧАС (ETA)**\n\n"
             f"Бот створений для завчасного інформування мешканців {texts['city_gen']} та прилеглих районів "
-            "про потенційну загрозу реактивних БпЛА, що рухаються транзитним коридором "
+            "про потенційну загрозу реактивних і звичайних ударних БпЛА, що рухаються транзитним коридором "
             f"({texts['route_regions']}).\n\n"
             "📡 **1. Джерела моніторингу (канали, які відстежуються):**\n"
             "Система в реальному часі аналізує повідомлення з офіційних та перевірених каналів:\n"
@@ -121,11 +122,11 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
             "• Кількість цілей визначається строго в межах контексту знайденого пункту, "
             "щоб виключити помилки зі зведених постів для інших областей.\n\n"
             "⏱ **3. Як розраховується орієнтовне вікно підльоту (ETA):**\n"
-            "• **Швидкість:** Середня крейсерська швидкість реактивних дронів складає **450–650 км/год** (близько 7.5–10.8 км/хв).\n"
+            "• **Тип загрози:** Система розпізнає швидкісні реактивні дрони (Шахед-238, швидкість 400–480 км/год) та звичайні ударні БпЛА (Шахед-136, швидкість 150–185 км/год).\n"
             "• **Маневри:** Політ рідко є прямолінійним. Дрони змінюють висоту і курс для огинання зон ППО, "
             "тому до дистанції закладається коефіцієнт маневрування.\n"
             "• **Розрахункове вікно:** Вказується діапазон від найшвидшого прямого дольоту до руху з маневрами "
-            "(наприклад, `13:31–13:38`, що відповідає `25–32 хв`).\n"
+            "(наприклад, `22:50–22:58`, що відповідає `26–33 хв`).\n"
             "• **Часовий пояс:** Усі часові мітки та вікна підльоту подаються за **Київським часом** (`Europe/Kyiv`).\n\n"
             f"📊 **4. Актуальний довідник рубежів до {texts['city_gen']}:**\n\n"
             f"{levels}\n\n"
@@ -229,7 +230,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
         active = tracker.get_active_targets() if tracker else []
         ref = tracker._get_ref() if tracker else None
         if not active:
-            lines.append("🟢 **Активних реактивних цілей на коридорі не зафіксовано.**")
+            lines.append("🟢 **Активних цілей на коридорі не зафіксовано.**")
         else:
             lines.append(f"⚠️ **Зафіксовано активних цілей на коридорі: {len(active)}**\n")
             level_labels = {
@@ -256,11 +257,10 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                             point_name = format_place_title(pt["names"][0])
                             break
 
-
-
                 lvl_display = level_labels.get(t.level, t.level.value)
+                drone_label = "Шахед" if getattr(t, "drone_type", None) == DroneType.CONVENTIONAL else "реактивний"
                 lines.append(
-                    f"• **Ціль #{idx}** ({t.target_count}х)\n"
+                    f"• **Ціль #{idx}** ({t.target_count}х • {drone_label})\n"
                     f"  Останній пункт: **{point_name}** (о {last_seen_k})\n"
                     f"  Статус: {lvl_display}\n"
                     f"  Очікування біля міста: **{eta_str}**\n"

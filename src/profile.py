@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -31,6 +31,7 @@ class CityProfile:
     target_keywords: list[str]
     cancel_keywords: list[str]
     points: list[dict]
+    conventional_speed_kmh: list[float] = field(default_factory=lambda: [150.0, 185.0])
 
 
 def parse_profile(data: dict) -> CityProfile:
@@ -68,6 +69,7 @@ def parse_profile(data: dict) -> CityProfile:
         target_keywords=list(data["target_keywords"]),
         cancel_keywords=list(data.get("cancel_keywords", [])),
         points=list(data["points"]),
+        conventional_speed_kmh=[float(x) for x in data.get("conventional_speed_kmh", [150.0, 185.0])],
     )
 
 

@@ -11,6 +11,7 @@ from src.engine.models import (
     ActionType,
     AlertEvent,
     AlertLevel,
+    DroneType,
     ParsedMessage,
     RawPost,
     Target,
@@ -56,6 +57,7 @@ class TargetTracker:
         self,
         point_id: str,
         posted_at: datetime,
+        drone_type: DroneType | None = None,
         is_new_target_marker: bool = False,
     ) -> Target | None:
         """Find the active target that the message can belong to."""
@@ -72,6 +74,10 @@ class TargetTracker:
 
         for target in self._active_targets.values():
             if target.status != TargetStatus.ACTIVE:
+                continue
+
+            # Strict isolation by drone speed category / type
+            if drone_type is not None and target.drone_type != drone_type:
                 continue
 
             time_diff = abs(posted_at - target.last_seen_utc)
@@ -168,6 +174,7 @@ class TargetTracker:
             target = self._find_matching_target(
                 point_id,
                 post.posted_at_utc,
+                drone_type=parsed.drone_type,
                 is_new_target_marker=parsed.is_new_target_marker,
             )
             is_new_target = False
@@ -182,6 +189,7 @@ class TargetTracker:
                     id=target_id,
                     points_sequence=[point_id],
                     last_point_id=point_id,
+                    drone_type=parsed.drone_type,
                     target_type=parsed.target_type,
                     target_count=parsed.count,
                     status=TargetStatus.ACTIVE,
@@ -243,6 +251,7 @@ class TargetTracker:
                 ref=ref,
                 post_time_utc=post.posted_at_utc,
                 current_time_utc=now,
+                drone_type=target.drone_type,
             )
             target.eta_min_minutes = rem_min
             target.eta_max_minutes = rem_max
@@ -299,11 +308,19 @@ class TargetTracker:
 
         # Find the target by point, or the nearest active target
         if parsed.action_point_id:
-            target = self._find_matching_target(parsed.action_point_id, post.posted_at_utc)
+            target = self._find_matching_target(
+                parsed.action_point_id,
+                post.posted_at_utc,
+                drone_type=parsed.drone_type,
+            )
+            if target is None:
+                target = self._find_matching_target(parsed.action_point_id, post.posted_at_utc)
 
         if target is None and self._active_targets:
-            # Take the most recent active target, but ensure compatibility
-            active = self.get_active_targets()
+            # Take the most recent active target of the same drone type, fallback to any active
+            active = [t for t in self.get_active_targets() if t.drone_type == parsed.drone_type]
+            if not active:
+                active = self.get_active_targets()
             if active:
                 candidate = max(active, key=lambda t: t.last_seen_utc)
                 # If this is a DIVERTED action:
@@ -411,7 +428,12 @@ class TargetTracker:
             for ch, mid in target.message_ids[-2:]:
                 source_links.append((ch, f"https://t.me/{ch}/{mid}"))
 
-        type_suffix = f" ({target.target_type})" if target.target_type else ""
+        if target.drone_type == DroneType.CONVENTIONAL:
+            type_suffix = " (Шахед)"
+        elif target.target_type:
+            type_suffix = f" ({target.target_type})"
+        else:
+            type_suffix = " (реактивний)"
 
         if target.level == AlertLevel.LEVEL_1:
             title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"

@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from src.engine.models import ActionType, AlertLevel, RawPost, TargetStatus
+from src.engine.models import ActionType, AlertLevel, DroneType, RawPost, TargetStatus
 from src.engine.tracker import TargetTracker
 from src.learning.reference import (
     ActiveReferenceCache,
@@ -426,6 +426,37 @@ class TestTargetTracker(unittest.TestCase):
         self.assertIn("Дунаївці", alerts_div[0].body)
         self.assertIn("Городок", alerts_div[0].body)
         self.assertNotIn("Тисмениця", alerts_div[0].body)
+
+    def test_conventional_shahed_eta_and_title(self):
+        # Conventional Shahed reported at Nova Ushytsia (187 km)
+        p1 = RawPost("chan_a", 501, "Шахед на Нову Ушицю", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.drone_type, DroneType.CONVENTIONAL)
+
+        alerts = self.tracker.process_message(p1, parsed1, now=T0)
+        self.assertEqual(len(alerts), 1)
+        # Verify title formatted as (Шахед)
+        self.assertEqual(alerts[0].title, "🟡 Потенційна загроза (Шахед): Нова Ушиця")
+        # Verify ETA is around 59–76 min (NOT 26–33 min)
+        target = self.tracker.get_active_targets()[0]
+        self.assertEqual(target.drone_type, DroneType.CONVENTIONAL)
+        self.assertGreaterEqual(target.eta_min_minutes, 55.0)
+        self.assertLessEqual(target.eta_max_minutes, 80.0)
+
+    def test_jet_and_conventional_concurrent_isolation(self):
+        # 1. Jet drone at Nova Ushytsia
+        p_jet = RawPost("chan_a", 601, "Реактивна герань на Нову Ушицю", T0)
+        self.tracker.process_message(p_jet, self.normalizer.parse(p_jet), now=T0)
+
+        # 2. Conventional Shahed also at Nova Ushytsia (different speed, different wave)
+        p_conv = RawPost("chan_b", 602, "Шахед на Нову Ушицю", T0 + timedelta(minutes=1))
+        self.tracker.process_message(p_conv, self.normalizer.parse(p_conv), now=T0 + timedelta(minutes=1))
+
+        # Must track as TWO separate targets!
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 2)
+        types = {t.drone_type for t in active}
+        self.assertEqual(types, {DroneType.JET, DroneType.CONVENTIONAL})
 
 
 if __name__ == "__main__":

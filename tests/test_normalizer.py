@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from src.engine.models import ActionType, RawPost
+from src.engine.models import ActionType, DroneType, RawPost
 from src.learning.reference import (
     ActiveReferenceCache,
     ReferenceRepository,
@@ -162,6 +162,47 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed = self.normalizer.parse(p)
         self.assertEqual(parsed.points, [])
         self.assertEqual(parsed.action, ActionType.NONE)
+
+    def test_conventional_vs_jet_drone_classification(self):
+        # 1. Conventional Shahed mention
+        p_conv = RawPost("chan_a", 1, "Шахед на Нову Ушицю", T0)
+        parsed_conv = self.normalizer.parse(p_conv)
+        self.assertEqual(parsed_conv.drone_type, DroneType.CONVENTIONAL)
+        self.assertFalse(parsed_conv.is_jet)
+        self.assertEqual(parsed_conv.points, ["nova_ushytsia"])
+
+        # 2. Moped mention (conventional)
+        p_moped = RawPost("chan_a", 2, "2х мопеди на Дунаївці", T0)
+        parsed_moped = self.normalizer.parse(p_moped)
+        self.assertEqual(parsed_moped.drone_type, DroneType.CONVENTIONAL)
+        self.assertFalse(parsed_moped.is_jet)
+        self.assertEqual(parsed_moped.count, 2)
+        self.assertEqual(parsed_moped.points, ["dunaivtsi"])
+
+        # 3. Explicit Jet mention
+        p_jet = RawPost("chan_a", 3, "Реактивний шахед на Камʼянець-Подільський", T0)
+        parsed_jet = self.normalizer.parse(p_jet)
+        self.assertEqual(parsed_jet.drone_type, DroneType.JET)
+        self.assertTrue(parsed_jet.is_jet)
+        self.assertEqual(parsed_jet.points, ["kamianets_podilskyi"])
+
+    def test_context_inheritance_respects_drone_type(self):
+        # Post 1: Jet drone on Nova Ushytsia
+        p1 = RawPost("chan_a", 10, "Реактивний БпЛА на Нову Ушицю", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.drone_type, DroneType.JET)
+
+        # Post 2: 3 minutes later, follow-up without general drone keyword inherits jet
+        p2 = RawPost("chan_a", 11, "Дунаївці — курс на захід", T0 + timedelta(minutes=3))
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.drone_type, DroneType.JET)
+        self.assertTrue(parsed2.is_jet)
+
+        # Post 3: 5 minutes later, explicit "Шахед" keyword does NOT inherit jet!
+        p3 = RawPost("chan_a", 12, "Шахед через Камʼянець-Подільський", T0 + timedelta(minutes=5))
+        parsed3 = self.normalizer.parse(p3)
+        self.assertEqual(parsed3.drone_type, DroneType.CONVENTIONAL)
+        self.assertFalse(parsed3.is_jet)
 
 
 if __name__ == "__main__":
