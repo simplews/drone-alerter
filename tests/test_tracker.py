@@ -356,6 +356,42 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alerts_sm[0].title, "Ціль змінила курс")
         self.assertEqual(len(self.tracker.get_active_targets()), 0)
 
+    def test_level_3b_target_isolation_and_divert_matching(self):
+        """Case: Target 1 reaches Tysmenytsia (Level 3B).
+        Target 2 moves Vendychany -> Nova Ushytsia -> Dunaivtsi.
+        A divert post at Dunaivtsi must divert Target 2 (Dunaivtsi), NOT Target 1 (Tysmenytsia).
+        """
+        # Target 1: Nova Ushytsia -> Tysmenytsia
+        t1_start = datetime(2026, 10, 14, 14, 40, 0, tzinfo=UTC)
+        p1 = RawPost("kudy_letyt", 401, "Реактивний БпЛА на Нову Ушицю", t1_start)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1_start)
+
+        t1_tys = datetime(2026, 10, 14, 15, 7, 22, tzinfo=UTC)
+        p1_tys = RawPost("monitoring_zaxid", 402, "Уже проходить Тлумач, наближається ближче до Тисмениці", t1_tys)
+        alerts_tys = self.tracker.process_message(p1_tys, self.normalizer.parse(p1_tys), now=t1_tys)
+        self.assertTrue(any(a.level == AlertLevel.LEVEL_3B for a in alerts_tys))
+
+        # Target 2: Vendychany at 15:08:32
+        t2_ven = datetime(2026, 10, 14, 15, 8, 32, tzinfo=UTC)
+        p2_ven = RawPost("kpszsu", 403, "Реактивний БпЛА повз Вендичани на Вінниччині ➡️ у напрямку Хмельниччини", t2_ven)
+        self.tracker.process_message(p2_ven, self.normalizer.parse(p2_ven), now=t2_ven)
+
+        # Target 2 moves to Nova Ushytsia & Dunaivtsi at 15:16:24
+        t2_dun = datetime(2026, 10, 14, 15, 16, 24, tzinfo=UTC)
+        p2_dun = RawPost("kudy_letyt", 404, "Хмельниччина:\nРеактивний БпЛА повз Нову Ушицю в бік Дунаївців", t2_dun)
+        self.tracker.process_message(p2_dun, self.normalizer.parse(p2_dun), now=t2_dun)
+
+        # Divert post at Dunaivtsi towards Horodok at 15:24:41
+        t_div = datetime(2026, 10, 14, 15, 24, 41, tzinfo=UTC)
+        p_div = RawPost("kudy_letyt", 405, "Хмельниччина:\nРеактивний БпЛА повз Дунаївці курсом на Городок", t_div)
+        alerts_div = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_div)
+
+        self.assertEqual(len(alerts_div), 1)
+        self.assertEqual(alerts_div[0].title, "Ціль змінила курс")
+        self.assertIn("Дунаївці", alerts_div[0].body)
+        self.assertIn("Городок", alerts_div[0].body)
+        self.assertNotIn("Тисмениця", alerts_div[0].body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -82,9 +82,22 @@ class TargetTracker:
             if not last_point:
                 continue
 
+            # If target has already reached Level 3 (immediate approach or over city),
+            # it cannot match distant upstream points (Level 1 or distant Level 2).
+            if target.level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B):
+                if new_point.level == 1:
+                    continue
+                if last_point.distance_km and new_point.distance_km and (new_point.distance_km - last_point.distance_km) > 40.0:
+                    continue
+
             # Check if this point matches the target track:
             # 1. Point already visited in this target's sequence (delayed report from another channel)
-            is_in_sequence = point_id in target.points_sequence and time_diff <= timedelta(minutes=15)
+            dist_back = (new_point.distance_km - last_point.distance_km) if (last_point.distance_km and new_point.distance_km) else 0.0
+            is_in_sequence = (
+                point_id in target.points_sequence
+                and dist_back <= 40.0
+                and time_diff <= timedelta(minutes=8)
+            )
 
             # 2. Same point as the current last_point_id inside dedup window
             is_same_point = (point_id == target.last_point_id) and (time_diff <= self._dedup_window)
@@ -282,6 +295,7 @@ class TargetTracker:
         """Safe asymmetric handling of shoot-down and turn-away (rule F7)."""
         alerts: list[AlertEvent] = []
         target = None
+        ref = self._get_ref()
 
         # Find the target by point, or the nearest active target
         if parsed.action_point_id:
@@ -292,9 +306,14 @@ class TargetTracker:
             active = self.get_active_targets()
             if active:
                 candidate = max(active, key=lambda t: t.last_seen_utc)
-                # If this is a DIVERTED action without explicit action_point_id,
-                # ensure the post does not describe a distant track far from candidate's location.
+                # If this is a DIVERTED action:
                 if parsed.action == ActionType.DIVERTED:
+                    # If an action_point_id was explicitly stated, candidate must be near that point
+                    if parsed.action_point_id and candidate.last_point_id:
+                        p_act = ref.points.get(parsed.action_point_id)
+                        p_cand = ref.points.get(candidate.last_point_id)
+                        if p_act and p_cand and p_act.distance_km and p_cand.distance_km and abs(p_act.distance_km - p_cand.distance_km) > 50.0:
+                            return alerts
                     time_diff = abs(post.posted_at_utc - candidate.last_seen_utc)
                     # Gap between the last seen point and divert mention must be within plausible track window
                     if time_diff <= self._max_gap:
@@ -519,7 +538,35 @@ class TargetTracker:
                 ))
                 continue
 
-            # Case 3: General cleanup for targets older than 45 minutes (e.g. Level 3)
+            # Case 3: Level 3A target whose ETA window expired without reaching Level 3B
+            if (
+                target.level == AlertLevel.LEVEL_3A
+                and target.eta_window_end_utc
+                and now > (target.eta_window_end_utc + timedelta(minutes=5))
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="ETA expired at Level 3A without reaching Level 3B",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+                continue
+
+            # Case 4: Level 3B target whose ETA window expired (drone is directly at or over the city).
+            # 4 minutes after ETA window end, the drone has already reached or been engaged.
+            if (
+                target.level == AlertLevel.LEVEL_3B
+                and target.eta_window_end_utc
+                and now > (target.eta_window_end_utc + timedelta(minutes=4))
+            ):
+                target.status = TargetStatus.EXPIRED
+                continue
+
+            # Case 5: General cleanup for targets older than 45 minutes
             if (now - target.last_seen_utc) > timedelta(minutes=45):
                 target.status = TargetStatus.EXPIRED
 
