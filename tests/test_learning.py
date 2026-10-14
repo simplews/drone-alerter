@@ -34,7 +34,12 @@ from src.learning.store import (
     LearningStore,
     OutcomeRow,
 )
-from src.learning.text import extract_place_candidates, normalize, phrases_match
+from src.learning.text import (
+    extract_place_candidates,
+    format_place_title,
+    normalize,
+    phrases_match,
+)
 
 T0 = datetime(2026, 10, 1, 18, 0, tzinfo=UTC)
 
@@ -51,6 +56,20 @@ class TextTests(unittest.TestCase):
     def test_normalize_apostrophes_and_abbrev(self):
         self.assertEqual(normalize("Кам'янець"), normalize("Камʼянець"))
         self.assertEqual(normalize("Н.Ушиця"), "н. ушиця")
+
+    def test_format_place_title(self):
+        self.assertEqual(format_place_title("муровані-курилівці"), "Муровані Кирилівці")
+        self.assertEqual(format_place_title("муровані курилівці"), "Муровані Кирилівці")
+        self.assertEqual(format_place_title("Муровані-курилівці"), "Муровані Кирилівці")
+        self.assertEqual(format_place_title("нова ушиця"), "Нова Ушиця")
+        self.assertEqual(format_place_title("Нова ушиця"), "Нова Ушиця")
+        self.assertEqual(format_place_title("камʼянець-подільський"), "Камʼянець-Подільський")
+        self.assertEqual(format_place_title("кам'янець-подільський"), "Камʼянець-Подільський")
+        self.assertEqual(format_place_title("скала-подільська"), "Скала-Подільська")
+        self.assertEqual(format_place_title("стара ушиця"), "Стара Ушиця")
+        self.assertEqual(format_place_title("хмельницького"), "Хмельницького")
+        self.assertEqual(format_place_title("nova_ushytsia"), "Nova Ushytsia")
+
 
     def test_extract_candidates(self):
         text = "Реактивна герань через Скалат курсом на Тернопільщину\n🛵 Борщів\nУвага всім!"

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from src.engine.models import ActionType, ParsedMessage, RawPost
 from src.learning.reference import ActiveReferenceCache, ReferenceData
-from src.learning.text import normalize
+from src.learning.text import format_place_title, normalize
 
 # Patterns for the number of targets
 _COUNT_PATTERNS = [
@@ -66,7 +66,7 @@ class MessageNormalizer:
             dest = re.sub(r"(?i)ччині$", "ччину", dest)
         elif re.search(r"(?i)щині$", dest):
             dest = re.sub(r"(?i)щині$", "щину", dest)
-        return dest.capitalize()
+        return format_place_title(dest)
 
     @classmethod
     def _extract_divert_destination(cls, line_norm: str, cancel_keywords: list[str]) -> str | None:

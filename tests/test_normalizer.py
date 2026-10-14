@@ -117,6 +117,13 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed4 = self.normalizer.parse(p4)
         self.assertEqual(parsed4.divert_destination, "Рівненщину")
 
+        # 5. Compound place name with hyphen and custom spelling override
+        p5 = RawPost("chan_a", 44, "Реактивний БпЛА на Муровані-Курилівці", T0)
+        parsed5 = self.normalizer.parse(p5)
+        self.assertEqual(parsed5.action, ActionType.DIVERTED)
+        self.assertEqual(parsed5.divert_destination, "Муровані Кирилівці")
+
+
     def test_distant_region_does_not_trigger_divert_action(self):
         # A post describing drone heading in Zhytomyr region / Berdychiv without corridor points
         # must NOT trigger ActionType.DIVERTED for western corridor

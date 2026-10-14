@@ -18,7 +18,7 @@ from src.engine.models import (
 )
 from src.learning.reference import ActiveReferenceCache, ReferenceData
 from src.learning.store import OUTCOME_UNKNOWN, LearningStore
-from src.learning.text import normalize
+from src.learning.text import format_place_title, normalize
 
 logger = logging.getLogger(__name__)
 
@@ -325,9 +325,10 @@ class TargetTracker:
             return alerts
 
         ref = self._get_ref()
-        point_name = target.last_point_id
+        point_name = format_place_title(target.last_point_id)
         if target.last_point_id in ref.points and ref.points[target.last_point_id].names:
-            point_name = ref.points[target.last_point_id].names[0].capitalize()
+            point_name = format_place_title(ref.points[target.last_point_id].names[0])
+
 
         source_links: list[tuple[str, str]] = []
         if post and post.channel and post.message_id:
@@ -399,7 +400,7 @@ class TargetTracker:
         post: RawPost | None = None,
         is_update: bool = False,
     ) -> AlertEvent:
-        point_display = point.names[0].capitalize() if point.names else target.last_point_id
+        point_display = format_place_title(point.names[0]) if point.names else format_place_title(target.last_point_id)
         count_prefix = f"{target.target_count}х " if target.target_count > 1 else ""
 
         # Collect the links to the original sources

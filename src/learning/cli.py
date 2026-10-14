@@ -27,6 +27,7 @@ from .aliases import discover_aliases
 from .pipeline import LearningConfig, diff, retrain
 from .reference import ReferenceRepository, seed_from_profile
 from .store import LearningStore, parse_utc
+from .text import format_place_title
 
 DEFAULT_REF_DIR = os.environ.get("REFERENCE_DIR", "data/reference")
 DEFAULT_DB = os.environ.get("LEARNING_DB", "data/learning.db")
@@ -177,7 +178,7 @@ def cmd_show(args, repo, store):
     print("-" * 90)
     sorted_points = sorted(ref.points.values(), key=lambda p: (p.level, -(p.eta_min or 0)))
     for p in sorted_points:
-        name = p.names[0].capitalize() if p.names else p.id
+        name = format_place_title(p.names[0]) if p.names else p.id
         eta_str = f"{p.eta_min:.0f}–{p.eta_max:.0f}" if p.eta_min is not None and p.eta_max is not None else "—"
         p_if_str = f"{p.base_rate:.1%}" if p.base_rate is not None else "—"
         lvl_marker = "⚪️ Рівень 1" if p.level == 1 else "🔴 Рівень 2" if p.level == 2 else "🟠 Рівень 3"

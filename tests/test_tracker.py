@@ -37,7 +37,7 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
         self.assertTrue(alerts1[0].is_silent)
-        self.assertEqual(alerts1[0].title, "🟡 Потенційна загроза (реактивна герань): Нова ушиця")
+        self.assertEqual(alerts1[0].title, "🟡 Потенційна загроза (реактивна герань): Нова Ушиця")
 
         # 2. Borshchiv (level 2, loud) - inherits target_type from earlier post
         t2 = T0 + timedelta(minutes=10)
@@ -73,6 +73,8 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0].level, AlertLevel.LEVEL_2)
         self.assertFalse(alerts[0].is_silent)
+        self.assertEqual(alerts[0].title, "🟠 Наближення (реактивна герань): Камʼянець-Подільський")
+
 
     def test_multi_target_decrement_on_downed(self):
         # 2 targets to Tlumach
@@ -124,7 +126,7 @@ class TestTargetTracker(unittest.TestCase):
         alerts1 = tracker_no_siren.process_message(p_div1, self.normalizer.parse(p_div1), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts1), 1)
         self.assertEqual(alerts1[0].title, "Ціль змінила курс")
-        self.assertIn("Ціль у районі Нова ушиця відвернула на Хмельницького", alerts1[0].body)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Хмельницького", alerts1[0].body)
         self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її все ж буде оголошено", alerts1[0].body)
 
         # 2. Divert with active siren
@@ -136,8 +138,17 @@ class TestTargetTracker(unittest.TestCase):
         alerts2 = tracker_siren.process_message(p_div2, self.normalizer.parse(p_div2), now=T0 + timedelta(minutes=5))
         self.assertEqual(len(alerts2), 1)
         self.assertEqual(alerts2[0].title, "Ціль змінила курс")
-        self.assertIn("Ціль у районі Нова ушиця відвернула на Північ", alerts2[0].body)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Північ", alerts2[0].body)
         self.assertIn("Залишайтеся в укриттях до оголошення відбою", alerts2[0].body)
+
+        # 3. Divert to Murovani-Kurylivtsi
+        p3 = RawPost("chan_a", 5, "Реактивна герань на Нову Ушицю", T0 + timedelta(minutes=20))
+        tracker_siren.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=20))
+        p_div3 = RawPost("chan_a", 6, "Ціль відвернула на Муровані-Курилівці", T0 + timedelta(minutes=25))
+        alerts3 = tracker_siren.process_message(p_div3, self.normalizer.parse(p_div3), now=T0 + timedelta(minutes=25))
+        self.assertEqual(len(alerts3), 1)
+        self.assertIn("Ціль у районі Нова Ушиця відвернула на Муровані Кирилівці", alerts3[0].body)
+
 
     def test_level_1_target_eta_timeout_marked_lost(self):
         store = LearningStore(":memory:")
