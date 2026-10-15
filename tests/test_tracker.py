@@ -89,7 +89,8 @@ class TestTargetTracker(unittest.TestCase):
         p2 = RawPost("chan_a", 21, "Біля Тлумача одну збито!", T0 + timedelta(minutes=2))
         alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=T0 + timedelta(minutes=2))
         self.assertEqual(len(alerts2), 1)
-        self.assertIn("ще 1 ціль(і) у повітрі", alerts2[0].body)
+        self.assertIn("Ще 1 ціль(і) може бути в повітрі", alerts2[0].body)
+        self.assertIn("до офіційного відбою", alerts2[0].body)
         # The target stays active!
         self.assertEqual(targets[0].status, TargetStatus.ACTIVE)
         self.assertEqual(targets[0].target_count, 1)
@@ -196,8 +197,8 @@ class TestTargetTracker(unittest.TestCase):
         timeout_alerts = tracker.check_timeouts(now=after_end)
         self.assertEqual(len(timeout_alerts), 1)
         self.assertEqual(timeout_alerts[0].title, "Ціль локаційно втрачена")
-        self.assertIn("Можливо локаційно втрачена", timeout_alerts[0].body)
-        self.assertIn("Слідкуйте за подальшими повідомленнями", timeout_alerts[0].body)
+        self.assertIn("бути втраченою локаційно або знищеною", timeout_alerts[0].body)
+        self.assertIn("Це не означає, що загрози немає", timeout_alerts[0].body)
         self.assertEqual(target.status, TargetStatus.LOST)
         self.assertEqual(len(tracker.get_active_targets()), 0)
 
@@ -467,8 +468,8 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alert.level, AlertLevel.REGIONAL)
         self.assertTrue(alert.is_silent)
         self.assertIn("Рух у напрямку Коломиї", alert.title)
-        self.assertIn("~55 км від ІФ", alert.title)
-        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+        self.assertIn("~55 км від Франківська", alert.title)
+        self.assertIn("Найімовірніше, в області буде оголошено тривогу.", alert.body)
 
     def test_regional_alert_bohorodchany_loud(self):
         # Bohorodchany (18 km, <=30 km -> loud push)
@@ -479,8 +480,8 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alert.level, AlertLevel.REGIONAL)
         self.assertFalse(alert.is_silent)
         self.assertIn("Рух у напрямку Богородчан", alert.title)
-        self.assertIn("~18 км від ІФ", alert.title)
-        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+        self.assertIn("~18 км від Франківська", alert.title)
+        self.assertIn("Найімовірніше, в області буде оголошено тривогу.", alert.body)
 
     def test_regional_escalation_to_level_3a(self):
         # 1. Target at Kolomyia (regional)

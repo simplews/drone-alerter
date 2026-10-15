@@ -384,9 +384,9 @@ class TargetTracker:
                 # Decrease the target counter in the group
                 target.target_count -= 1
                 body = (
-                    f"⚪️ За повідомленнями каналів, одну ціль у районі {point_name}, "
-                    f"імовірно, збито/уражено. Увага: ще {target.target_count} ціль(і) у повітрі! "
-                    f"Залишайтеся в укриттях."
+                    f"⚪️ За повідомленнями каналів, одну з цілей імовірно збито або втрачено. "
+                    f"Ще {target.target_count} ціль(і) може бути в повітрі. "
+                    f"Залишайтеся в укриттях до офіційного відбою."
                 )
                 alerts.append(AlertEvent(
                     target_id=target.id,
@@ -399,9 +399,8 @@ class TargetTracker:
             else:
                 target.status = TargetStatus.PROBABLY_DOWNED
                 body = (
-                    f"⚪️ За повідомленнями каналів, ціль у районі {point_name}, "
-                    f"імовірно, уражена або втрачена. "
-                    f"Залишайтеся в укриттях до офіційного відбою ОВА/ПС."
+                    "⚪️ За повідомленнями каналів, ціль, яку ми відстежували, імовірно, уражена або втрачена. "
+                    "Це не скасування тривоги: залишайтеся в укриттях до офіційного відбою ОВА/ПС."
                 )
                 alerts.append(AlertEvent(
                     target_id=target.id,
@@ -466,30 +465,32 @@ class TargetTracker:
         if target.level == AlertLevel.REGIONAL or getattr(point, "is_regional", False):
             name_gen = getattr(point, "name_gen", "") or point_display
             dist = point.distance_km or 0.0
-            title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від ІФ). Ймовірна тривога в області"
+            title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Ймовірна тривога в області"
             body = (
                 f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
                 f"(~{dist:.0f} км від Івано-Франківська).\n\n"
-                f"🚨 **Ймовірна повітряна тривога в області (~100%).**\n"
+                f"🚨 **Найімовірніше, в області буде оголошено тривогу.**\n"
                 f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
                 f"Слідкуйте за офіційними повідомленнями та будьте готові перейти в укриття."
             )
             is_silent = (dist > 30.0)
 
-        elif target.level == AlertLevel.LEVEL_1:
-            title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"
-            body = f"⏱ Очікується біля міста: **{window_str}**"
-            is_silent = True
+        elif target.level in (AlertLevel.LEVEL_1, AlertLevel.LEVEL_2, AlertLevel.LEVEL_3A):
+            if target.eta_min_minutes is not None and target.eta_max_minutes is not None:
+                eta_duration = f" (≈{target.eta_min_minutes:.0f}–{target.eta_max_minutes:.0f} хв)"
+            else:
+                eta_duration = ""
+            body = f"⏱ Очікується біля міста: **{window_str}**{eta_duration}"
 
-        elif target.level == AlertLevel.LEVEL_2:
-            title = f"🟠 {count_prefix}Наближення{type_suffix}: {point_display}"
-            body = f"⏱ Очікується біля міста: **{window_str}**"
-            is_silent = False
-
-        elif target.level == AlertLevel.LEVEL_3A:
-            title = f"🔴 {count_prefix}Небезпека (підліт){type_suffix}: {point_display}"
-            body = f"⏱ Очікується біля міста: **{window_str}**"
-            is_silent = False
+            if target.level == AlertLevel.LEVEL_1:
+                title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"
+                is_silent = True
+            elif target.level == AlertLevel.LEVEL_2:
+                title = f"🟠 {count_prefix}Наближення{type_suffix}: {point_display}"
+                is_silent = False
+            else:  # LEVEL_3A
+                title = f"🔴 {count_prefix}Небезпека (підліт){type_suffix}: {point_display}"
+                is_silent = False
 
         else:  # LEVEL_3B
             title = f"🔴 {count_prefix}Небезпека біля / над містом{type_suffix}: {point_display}"
@@ -570,9 +571,8 @@ class TargetTracker:
                         source_links.append((ch, f"https://t.me/{ch}/{mid}"))
 
                 body = (
-                    "⚪️ Нових повідомлень про рух цілі немає. "
-                    "Можливо локаційно втрачена або змінила курс. "
-                    "Слідкуйте за подальшими повідомленнями."
+                    "⚪️ Нових повідомлень про цю ціль немає: вона могла змінити курс, бути втраченою локаційно або знищеною. "
+                    "Це не означає, що загрози немає — слідкуйте за офіційними повідомленнями."
                 )
                 alerts.append(AlertEvent(
                     target_id=target.id,
@@ -608,7 +608,7 @@ class TargetTracker:
 
                 body = (
                     "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
-                    "Імовірно, змінила курс або втрачена. "
+                    "Імовірно, змінила курс або втрачена, але це не означає, що загрози немає. "
                     "Слідкуйте за офіційними повідомленнями."
                 )
                 alerts.append(AlertEvent(
