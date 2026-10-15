@@ -13,6 +13,7 @@ from aiogram.types import BotCommand, Message
 from src.engine.models import AlertEvent, AlertLevel, DroneType
 from src.learning.text import format_place_title
 from src.profile import get_profile
+from src.telegram.feedback import FeedbackRepository, register_feedback_handlers
 from src.utils.time import format_kyiv_time, now_kyiv
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,24 @@ class SubscriberRepository:
         return self.conn.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
 
 
-def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren_service=None) -> Dispatcher:
+def create_bot_dispatcher(
+    subscribers: SubscriberRepository,
+    tracker=None,
+    siren_service=None,
+    feedback_repo: FeedbackRepository | None = None,
+    feedback_chat_id: int | None = None,
+    feedback_admin_ids: list[int] | None = None,
+) -> Dispatcher:
     dp = Dispatcher()
+
+    if feedback_repo is None:
+        from src.config import settings
+        feedback_repo = FeedbackRepository(settings.subscribers_db_path)
+
+    from src.config import settings
+    f_chat_id = feedback_chat_id if feedback_chat_id is not None else settings.feedback_chat_id
+    f_admin_ids = feedback_admin_ids if feedback_admin_ids is not None else settings.feedback_admin_ids
+    register_feedback_handlers(dp, feedback_repo, feedback_chat_id=f_chat_id, admin_ids=f_admin_ids)
 
     def get_levels_text() -> str:
         texts = get_profile().texts
@@ -66,17 +83,29 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                 2: ("🟠 **Рівень 2 — Наближення (гучне сповіщення):**", []),
                 3: ("🔴 **Рівень 3 — Безпосередня небезпека (термінове гучне сповіщення):**", []),
             }
-            for p in sorted(ref.points.values(), key=lambda pt: pt.distance_km, reverse=True):
-                if p.level in groups:
+            regional_items = []
+            for p in sorted(ref.points.values(), key=lambda pt: pt.distance_km or 0.0, reverse=True):
+                if getattr(p, "is_regional", False):
+                    p_name = format_place_title(p.names[0]) if p.names else p.id
+                    dist_str = f"~{p.distance_km:.0f} км" if p.distance_km else "—"
+                    sound_note = "гучне сповіщення" if (p.distance_km or 0.0) <= 30.0 else "тихе сповіщення"
+                    regional_items.append(f"• **{p_name}:** {dist_str} від ІФ ({sound_note}) | загроза району області")
+                elif p.level in groups:
                     p_name = format_place_title(p.names[0]) if p.names else p.id
                     eta_str = f"**{p.eta_min:.0f}–{p.eta_max:.0f} хв**" if p.eta_min is not None and p.eta_max is not None else "—"
                     extra = " | рубежі передмістя" if p.id in ("khryplyn", "tysmenytsia") else ""
                     groups[p.level][1].append(f"• **{p_name}:** ~{p.distance_km:.0f} км{extra} | орієнтовно {eta_str}")
-            res = "\n\n".join(
+            res_blocks = [
                 title + "\n" + "\n".join(items)
                 for title, items in groups.values()
                 if items
-            )
+            ]
+            if regional_items:
+                res_blocks.append(
+                    "ℹ️ **Регіональні вектори загроз (ймовірна тривога в області):**\n"
+                    + "\n".join(regional_items)
+                )
+            res = "\n\n".join(res_blocks)
             if res.strip():
                 return res
 
@@ -174,8 +203,9 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
             "/status — поточний стан тривоги та активні цілі\n"
             "/eta — таблиця рубежів коридору та орієнтовний час підльоту (ETA)\n"
             "/howitworks — як працює система, канали моніторингу та алгоритм\n"
-            "/disclaimer — безпекове застереження\n"
             "/test — перевірка звуку та налаштувань сповіщень\n"
+            "/feedback — зворотний звʼязок та повідомлення про помилку\n"
+            "/disclaimer — безпекове застереження\n"
             "/stop — зупинити сповіщення та видалити мій акаунт"
         )
         await message.answer(text, parse_mode="Markdown")
@@ -238,6 +268,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                 AlertLevel.LEVEL_2: "🟠 Рівень 2 (Наближення)",
                 AlertLevel.LEVEL_3A: "🔴 Рівень 3A (Безпосередня небезпека)",
                 AlertLevel.LEVEL_3B: "🔴 Рівень 3B (Небезпека біля / над містом)",
+                AlertLevel.REGIONAL: "ℹ️ Загроза в області (ймовірна тривога)",
             }
             for idx, t in enumerate(active, 1):
                 eta_str = f"{t.eta_min_minutes:.0f}–{t.eta_max_minutes:.0f} хв"
@@ -259,11 +290,15 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
                 lvl_display = level_labels.get(t.level, t.level.value)
                 drone_label = "Шахед" if getattr(t, "drone_type", None) == DroneType.CONVENTIONAL else "реактивний"
+                if t.level == AlertLevel.REGIONAL:
+                    threat_line = "  Очікування: **загроза району області (курс не на ІФ)**\n"
+                else:
+                    threat_line = f"  Очікування біля міста: **{eta_str}**\n"
                 lines.append(
                     f"• **Ціль #{idx}** ({t.target_count}х • {drone_label})\n"
                     f"  Останній пункт: **{point_name}** (о {last_seen_k})\n"
                     f"  Статус: {lvl_display}\n"
-                    f"  Очікування біля міста: **{eta_str}**\n"
+                    f"{threat_line}"
                 )
 
         now_str = now_kyiv().strftime("%H:%M:%S")
@@ -274,8 +309,10 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     @dp.message(Command("stop"))
     async def cmd_stop(message: Message):
         subscribers.remove(message.chat.id)
+        if feedback_repo:
+            feedback_repo.delete_user_tickets(message.chat.id)
         await message.answer(
-            "Всі сповіщення зупинено. Ваш Telegram ID видалено зі списку отримувачів.\n\n"
+            "Всі сповіщення зупинено. Ваш Telegram ID видалено зі списку отримувачів та бази звернень.\n\n"
             "Якщо забажаєте відновити сповіщення у майбутньому, просто надішліть команду /start.",
             parse_mode="Markdown",
         )
@@ -290,6 +327,7 @@ async def setup_bot_commands(bot: Bot) -> None:
         BotCommand(command="eta", description="Таблиця рубежів та орієнтовний час"),
         BotCommand(command="howitworks", description="Як працює система та моніторинг"),
         BotCommand(command="test", description="Перевірити сповіщення та звук"),
+        BotCommand(command="feedback", description="Зворотний звʼязок та помилки"),
         BotCommand(command="disclaimer", description="Безпекове застереження"),
         BotCommand(command="stop", description="Зупинити отримання сповіщень"),
     ]

@@ -17,6 +17,8 @@ services:
       - SUBSCRIBERS_DB_PATH=/app/data/subscribers.db
       - API_HOST=0.0.0.0
       - API_PORT=8080
+      - FEEDBACK_CHAT_ID=${FEEDBACK_CHAT_ID:-}
+      - FEEDBACK_ADMIN_IDS=${FEEDBACK_ADMIN_IDS:-}
     volumes:
       - ./data:/app/data
 

@@ -20,6 +20,7 @@ class AlertLevel(str, Enum):
     LEVEL_2 = "level_2"        # Approaching (Kamianets-Podilskyi, Skala, Borshchiv, Tovste) - loud push
     LEVEL_3A = "level_3a"      # Close approach (Chernelytsia, Tlumach) 4-8 min - urgent loud push
     LEVEL_3B = "level_3b"      # Over the city or suburbs (Tysmenytsia, Khryplyn) 0-2 min - urgent loud push
+    REGIONAL = "regional"      # Regional threat in oblast (Kolomyia, Burshtyn, Kalush, etc.) - siren likely
     INFO = "info"              # Information update (probably shot down, turn away)
 
 

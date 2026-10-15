@@ -56,7 +56,12 @@ def calculate_eta(
     min_int = round(rem_min)
     max_int = round(rem_max)
 
-    if max_int <= 2:
+    if getattr(point, "is_regional", False):
+        if min_int <= 0 and max_int <= 0:
+            window_str = "у разі повороту на місто: менше 2 хв"
+        else:
+            window_str = f"у разі повороту на місто: ~{min_int}–{max_int} хв ({start_str}–{end_str})"
+    elif max_int <= 2:
         window_str = f"{start_str}–{end_str} (менше 2 хв / над містом зараз)"
     else:
         window_str = f"{start_str}–{end_str} (за {min_int}–{max_int} хв)"
@@ -64,8 +69,10 @@ def calculate_eta(
     return rem_min, rem_max, window_start, window_end, window_str
 
 
-def determine_level(point_id: str, point_level: int) -> AlertLevel:
+def determine_level(point_id: str, point_level: int, is_regional: bool = False) -> AlertLevel:
     """Select the alert level from the point and its level in the reference."""
+    if is_regional:
+        return AlertLevel.REGIONAL
     if point_id in ("tysmenytsia", "khryplyn"):
         return AlertLevel.LEVEL_3B
     if point_id in ("chernelytsia", "tlumach") or point_level == 3:

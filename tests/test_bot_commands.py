@@ -23,7 +23,13 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         siren_state = MagicMock(is_active=False, region="Івано-Франківська область", changed_at="2026-10-14 18:00:00")
         self.siren_service.get_current_state.return_value = siren_state
 
-        self.dp = create_bot_dispatcher(self.sub_repo, tracker=self.tracker, siren_service=self.siren_service)
+        self.feedback_repo = MagicMock()
+        self.dp = create_bot_dispatcher(
+            self.sub_repo,
+            tracker=self.tracker,
+            siren_service=self.siren_service,
+            feedback_repo=self.feedback_repo,
+        )
 
     def _get_handler(self, name: str):
         for h in self.dp.message.handlers:
@@ -44,6 +50,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/status", text)
         self.assertIn("/eta", text)
         self.assertIn("/howitworks", text)
+        self.assertIn("/feedback", text)
         self.assertIn("/disclaimer", text)
         self.assertIn("/test", text)
         self.assertIn("/stop", text)
@@ -104,6 +111,29 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("🟡 Рівень 1 (Потенційна загроза)", text)
         self.assertIn("26–33 хв", text)
 
+    async def test_cmd_status_regional_target(self):
+        handler = self._get_handler("cmd_status")
+        now = datetime(2026, 10, 15, 4, 30, tzinfo=UTC)
+        mock_target = Target(
+            id="regional-uuid",
+            level=AlertLevel.REGIONAL,
+            last_point_id="kolomyia",
+            last_seen_utc=now,
+            target_count=1,
+            eta_min_minutes=6.0,
+            eta_max_minutes=9.0,
+        )
+        self.tracker.get_active_targets.return_value = [mock_target]
+
+        msg = MagicMock(spec=Message, text="/status", chat=MagicMock(spec=Chat, id=109))
+        msg.answer = AsyncMock()
+
+        await handler(msg)
+        text = msg.answer.call_args[0][0]
+        self.assertIn("Коломия", text)
+        self.assertIn("ℹ️ Загроза в області (ймовірна тривога)", text)
+        self.assertIn("загроза району області (курс не на ІФ)", text)
+
     async def test_cmd_eta(self):
         handler = self._get_handler("cmd_eta")
         msg = MagicMock(spec=Message, text="/eta", chat=MagicMock(spec=Chat, id=104))
@@ -158,6 +188,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
 
         await handler(msg)
         self.sub_repo.remove.assert_called_once_with(108)
+        self.feedback_repo.delete_user_tickets.assert_called_once_with(108)
         text = msg.answer.call_args[0][0]
         self.assertIn("Всі сповіщення зупинено", text)
         self.assertIn("/start", text)
@@ -169,4 +200,4 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         bot.set_my_commands.assert_called_once()
         cmds = bot.set_my_commands.call_args[0][0]
         cmd_names = [c.command for c in cmds]
-        self.assertEqual(cmd_names, ["status", "eta", "howitworks", "test", "disclaimer", "stop"])
+        self.assertEqual(cmd_names, ["status", "eta", "howitworks", "test", "feedback", "disclaimer", "stop"])

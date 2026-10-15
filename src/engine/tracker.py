@@ -96,6 +96,15 @@ class TargetTracker:
                 if last_point.distance_km and new_point.distance_km and (new_point.distance_km - last_point.distance_km) > 40.0:
                     continue
 
+            # Prevent cross-corridor merging between regional points and distant main corridor points
+            if (
+                getattr(last_point, "is_regional", False) != getattr(new_point, "is_regional", False)
+                and last_point.distance_km
+                and new_point.distance_km
+                and abs(last_point.distance_km - new_point.distance_km) > 45.0
+            ):
+                continue
+
             # Check if this point matches the target track:
             # 1. Point already visited in this target's sequence (delayed report from another channel)
             dist_back = (new_point.distance_km - last_point.distance_km) if (last_point.distance_km and new_point.distance_km) else 0.0
@@ -195,7 +204,7 @@ class TargetTracker:
                     status=TargetStatus.ACTIVE,
                     first_seen_utc=post.posted_at_utc,
                     last_seen_utc=post.posted_at_utc,
-                    level=determine_level(point_id, point.level),
+                    level=determine_level(point_id, point.level, is_regional=getattr(point, "is_regional", False)),
                     channels={post.channel},
                     message_ids=[(post.channel, post.message_id)],
                 )
@@ -215,7 +224,7 @@ class TargetTracker:
                         target.last_point_id = point_id
                         is_advance = True
                 else:
-                    new_pt_level = determine_level(point_id, point.level)
+                    new_pt_level = determine_level(point_id, point.level, is_regional=getattr(point, "is_regional", False))
                     if self._level_rank(new_pt_level) > self._level_rank(target.level):
                         target.last_point_id = point_id
                         is_advance = True
@@ -229,9 +238,11 @@ class TargetTracker:
                 target.channels.add(post.channel)
                 target.message_ids.append((post.channel, post.message_id))
 
-                # Escalate the level (the level can only go up)
-                new_level = determine_level(point_id, point.level)
-                if self._level_rank(new_level) > self._level_rank(target.level):
+                # Escalate the level (the level can only go up, or shift to regional when regional point is hit)
+                new_level = determine_level(point_id, point.level, is_regional=getattr(point, "is_regional", False))
+                if getattr(point, "is_regional", False):
+                    target.level = AlertLevel.REGIONAL
+                elif self._level_rank(new_level) > self._level_rank(target.level):
                     target.level = new_level
 
             # Record the mention in the learning store
@@ -282,6 +293,23 @@ class TargetTracker:
                 should_alert = True
                 alerted_points.add(point_id)
             else:
+                is_update = True
+
+            # If the post is too stale (e.g. from a Telethon backlog replay after reconnect/restart,
+            # or an edit to an old message), do not broadcast a new alert to subscribers.
+            post_age_min = max(0.0, (now - post.posted_at_utc).total_seconds() / 60.0)
+            max_age_min = 7.0 if target.drone_type == DroneType.JET else 15.0
+            is_stale_post = post_age_min > max_age_min or (post.is_edit and post_age_min > 5.0)
+
+            if is_stale_post and should_alert:
+                logger.warning(
+                    "Пропуск запізнілого сповіщення: пост %s/%s опубліковано %.1f хв тому (поріг %.1f хв)",
+                    post.channel,
+                    post.message_id,
+                    post_age_min,
+                    max_age_min,
+                )
+                should_alert = False
                 is_update = True
 
             if should_alert or is_update:
@@ -435,7 +463,20 @@ class TargetTracker:
         else:
             type_suffix = " (реактивний)"
 
-        if target.level == AlertLevel.LEVEL_1:
+        if target.level == AlertLevel.REGIONAL or getattr(point, "is_regional", False):
+            name_gen = getattr(point, "name_gen", "") or point_display
+            dist = point.distance_km or 0.0
+            title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від ІФ). Ймовірна тривога в області"
+            body = (
+                f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
+                f"(~{dist:.0f} км від Івано-Франківська).\n\n"
+                f"🚨 **Ймовірна повітряна тривога в області (~100%).**\n"
+                f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
+                f"Слідкуйте за офіційними повідомленнями та будьте готові перейти в укриття."
+            )
+            is_silent = (dist > 30.0)
+
+        elif target.level == AlertLevel.LEVEL_1:
             title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"
             body = f"⏱ Очікується біля міста: **{window_str}**"
             is_silent = True
@@ -471,6 +512,7 @@ class TargetTracker:
     def _level_rank(level: AlertLevel) -> int:
         ranks = {
             AlertLevel.LEVEL_1: 1,
+            AlertLevel.REGIONAL: 1,
             AlertLevel.LEVEL_2: 2,
             AlertLevel.LEVEL_3A: 3,
             AlertLevel.LEVEL_3B: 4,
@@ -485,6 +527,24 @@ class TargetTracker:
 
         for target in list(self._active_targets.values()):
             if target.status != TargetStatus.ACTIVE:
+                continue
+
+            # Case 0: Regional target whose ETA window expired without escalating
+            if (
+                target.level == AlertLevel.REGIONAL
+                and target.eta_window_end_utc
+                and now > (target.eta_window_end_utc + timedelta(minutes=10))
+            ):
+                target.status = TargetStatus.LOST
+                if self._store:
+                    try:
+                        self._store.label_target(
+                            target.id,
+                            OUTCOME_UNKNOWN,
+                            notes="Regional target expired without approaching IF",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
                 continue
 
             # Case 1: Level 1 target whose ETA window expired without reaching Level 2

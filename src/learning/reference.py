@@ -40,6 +40,8 @@ class PointRef:
     # P(target goes to the city | target mentioned at this point), smoothed estimate.
     base_rate: float | None = None
     n_outcomes: int = 0
+    is_regional: bool = False
+    name_gen: str = ""
 
 
 @dataclass
@@ -211,7 +213,17 @@ class ActiveReferenceCache:
                             eta_min=float(eta_min) if has_eta else None,
                             eta_max=float(eta_max) if has_eta else None,
                             eta_method="profile_seed" if has_eta else "none",
+                            is_regional=bool(item.get("is_regional", False)),
+                            name_gen=str(item.get("name_gen", "")),
                         )
+                    else:
+                        if "is_regional" in item:
+                            ref.points[pid].is_regional = bool(item["is_regional"])
+                        if "name_gen" in item:
+                            ref.points[pid].name_gen = str(item["name_gen"])
+                        for name in item.get("names", []):
+                            if name not in ref.points[pid].names:
+                                ref.points[pid].names.append(name)
             except Exception:  # noqa: BLE001, S110
                 pass
             self._ref = ref
@@ -234,6 +246,8 @@ def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
             eta_min=float(eta_min) if has_eta else None,
             eta_max=float(eta_max) if has_eta else None,
             eta_method="seed" if has_eta else "none",
+            is_regional=bool(item.get("is_regional", False)),
+            name_gen=str(item.get("name_gen", "")),
         )
     return ReferenceData(
         points=points,

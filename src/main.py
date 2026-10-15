@@ -30,6 +30,7 @@ from src.telegram.bot import (
     create_bot_dispatcher,
     setup_bot_commands,
 )
+from src.telegram.feedback import FeedbackRepository
 from src.telegram.listener import TelegramChannelListener
 from src.utils.time import now_kyiv
 
@@ -54,6 +55,7 @@ class Application:
         self.ref_cache = ActiveReferenceCache(self.repo)
         self.learning_store = LearningStore(settings.learning_db_path)
         self.subscriber_repo = SubscriberRepository(settings.subscribers_db_path)
+        self.feedback_repo = FeedbackRepository(settings.subscribers_db_path)
 
         # 2. Domain core
         self.normalizer = MessageNormalizer(self.ref_cache)
@@ -79,7 +81,14 @@ class Application:
         self.bot_dp = None
         if settings.telegram_bot_token:
             self.bot = Bot(token=settings.telegram_bot_token)
-            self.bot_dp = create_bot_dispatcher(self.subscriber_repo, self.tracker, self.siren_service)
+            self.bot_dp = create_bot_dispatcher(
+                self.subscriber_repo,
+                self.tracker,
+                self.siren_service,
+                feedback_repo=self.feedback_repo,
+                feedback_chat_id=settings.feedback_chat_id,
+                feedback_admin_ids=settings.feedback_admin_ids,
+            )
         else:
             logger.warning("TELEGRAM_BOT_TOKEN не задано. Бот сповіщень вимкнено.")
 
@@ -222,6 +231,7 @@ class Application:
             await self.bot.session.close()
         server.should_exit = True
         self.learning_store.close()
+        self.feedback_repo.close()
         logger.info("Сервіс успішно зупинено.")
 
 

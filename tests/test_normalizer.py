@@ -204,6 +204,50 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed3.drone_type, DroneType.CONVENTIONAL)
         self.assertFalse(parsed3.is_jet)
 
+    def test_raion_disambiguation_with_specific_settlement(self):
+        # When a post mentions a specific settlement and its district on the same line,
+        # the district center should be suppressed in favor of the specific settlement.
+        p1 = RawPost("chan_a", 20, "Чернелиця, Коломийський район", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, ["chernelytsia"])
+
+    def test_standalone_raion_detection(self):
+        # When only the district is mentioned, the regional center point is identified.
+        p1 = RawPost("chan_a", 21, "Шахед у Коломийському районі", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, ["kolomyia"])
+
+    def test_kamianets_podilskyi_raion_maps_to_nova_ushytsia(self):
+        # A drone heading from Vinnytsia to Kamianets-Podilskyi district enters the corridor
+        # at Nova Ushytsia (Level 1) rather than prematurely triggering the city (Level 2).
+        post = RawPost(
+            "monitorwarr",
+            42625,
+            "⚠️ 1 реактив на Вінниччині у бік Хмельниччини, Камʼянець-Подільський р-н.",
+            T0,
+        )
+        parsed = self.normalizer.parse(post)
+        self.assertTrue(parsed.is_jet)
+        self.assertEqual(parsed.points, ["nova_ushytsia"])
+
+    def test_nova_ushytsia_inflections(self):
+        # "дрон ще в районі Н. Ушиці" must match nova_ushytsia
+        post = RawPost("monitoring_zaxid", 28069, "дрон ще в районі Н. Ушиці", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertEqual(parsed.points, ["nova_ushytsia"])
+
+    def test_settlement_in_kamianets_district_disambiguation(self):
+        # Specific settlement (Dunaivtsi) takes precedence over the raion qualifier
+        post = RawPost("monitorwarr", 42640, "⚠️ 1 реактив: Дунаївці, Камʼянець-Подільський р-н", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertEqual(parsed.points, ["dunaivtsi"])
+
+    def test_kamianets_podilskyi_city_direct_mention(self):
+        # Explicit mention of the city without district suffix triggers the city point
+        post = RawPost("kudy_letyt", 42650, "Хмельниччина:\nРеактивний БпЛА курсом на Камʼянець-Подільський", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertEqual(parsed.points, ["kamianets_podilskyi"])
+
 
 if __name__ == "__main__":
     unittest.main()
