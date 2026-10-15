@@ -30,6 +30,7 @@
 - **Telegram Adapters (`src/telegram/`)**:
   - `listener.py`: Telethon MTProto клієнт з heartbeat та автоматичним сповіщенням про розрив зв'язку.
   - `bot.py`: Aiogram 3 бот сповіщень із підтримкою DND-налаштувань користувача та приватності (`/stop`).
+  - `feedback.py`: Двостороння анонімна система зворотного звʼязку через адмін-групу ([docs/FEEDBACK.md](docs/FEEDBACK.md)).
   - `generate_session.py`: Генератор безфайлової сесії `TELETHON_STRING_SESSION`.
 - **Healthcheck & Monitoring API (`src/api/`)**:
   - `server.py`: FastAPI ендпоінти `/health` та `/targets`.
