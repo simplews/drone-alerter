@@ -513,6 +513,53 @@ class TestTargetTracker(unittest.TestCase):
         active = self.tracker.get_active_targets()
         self.assertEqual(len(active), 2)
 
+    def test_kamianets_podilskyi_raion_to_city_escalation(self):
+        # 1. Post from monitorwarr: target moving from Vinnytsia towards Kamianets-Podilskyi raion
+        # Must produce Level 1 (silent alert at Nova Ushytsia), NOT premature Level 2 Kamianets city
+        p1 = RawPost(
+            "monitorwarr",
+            42625,
+            "⚠️ 1 реактив на Вінниччині у бік Хмельниччини, Камʼянець-Подільський р-н.",
+            T0,
+        )
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(alerts1[0].level, AlertLevel.LEVEL_1)
+        self.assertTrue(alerts1[0].is_silent)
+        self.assertIn("Нова Ушиця", alerts1[0].title)
+
+        # 2. Corroborating post from monitoring_zaxid: "дрон ще в районі Н. Ушиці"
+        t2 = T0 + timedelta(minutes=2)
+        p2 = RawPost("monitoring_zaxid", 28069, "дрон ще в районі Н. Ушиці", t2)
+        self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].level, AlertLevel.LEVEL_1)
+
+        # 3. Later target reaches Kamianets-Podilskyi city directly
+        t3 = T0 + timedelta(minutes=8)
+        p3 = RawPost("monitorwarr", 42635, "⚠️ 1 реактив на Камʼянець-Подільський.", t3)
+        alerts3 = self.tracker.process_message(p3, self.normalizer.parse(p3), now=t3)
+        real_alerts3 = [a for a in alerts3 if not a.is_update]
+        self.assertEqual(len(real_alerts3), 1)
+        self.assertEqual(real_alerts3[0].level, AlertLevel.LEVEL_2)
+        self.assertFalse(real_alerts3[0].is_silent)
+        self.assertIn("Камʼянець-Подільський", real_alerts3[0].title)
+
+    def test_stale_delayed_post_does_not_trigger_broadcast(self):
+        # A post published 16 minutes ago (e.g. from backlog catch-up upon reconnect or old edit)
+        # must be processed for tracking/store, but NOT broadcast as a fresh alert (is_update=True)
+        t_posted = T0
+        t_received = T0 + timedelta(minutes=16)
+        post = RawPost("monitoring_zaxid", 28069, "дрон ще в районі Н. Ушиці", t_posted)
+        parsed = self.normalizer.parse(post)
+        alerts = self.tracker.process_message(post, parsed, now=t_received)
+        # Must be treated as update/deduped, not a fresh broadcast alert
+        broadcast_alerts = [a for a in alerts if not a.is_update]
+        self.assertEqual(len(broadcast_alerts), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

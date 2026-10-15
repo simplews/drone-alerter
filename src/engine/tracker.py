@@ -295,6 +295,23 @@ class TargetTracker:
             else:
                 is_update = True
 
+            # If the post is too stale (e.g. from a Telethon backlog replay after reconnect/restart,
+            # or an edit to an old message), do not broadcast a new alert to subscribers.
+            post_age_min = max(0.0, (now - post.posted_at_utc).total_seconds() / 60.0)
+            max_age_min = 7.0 if target.drone_type == DroneType.JET else 15.0
+            is_stale_post = post_age_min > max_age_min or (post.is_edit and post_age_min > 5.0)
+
+            if is_stale_post and should_alert:
+                logger.warning(
+                    "Пропуск запізнілого сповіщення: пост %s/%s опубліковано %.1f хв тому (поріг %.1f хв)",
+                    post.channel,
+                    post.message_id,
+                    post_age_min,
+                    max_age_min,
+                )
+                should_alert = False
+                is_update = True
+
             if should_alert or is_update:
                 alert = self._build_alert(target, calc_point, w_str, post=post, is_update=is_update)
                 alerts.append(alert)

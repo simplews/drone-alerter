@@ -221,6 +221,9 @@ class ActiveReferenceCache:
                             ref.points[pid].is_regional = bool(item["is_regional"])
                         if "name_gen" in item:
                             ref.points[pid].name_gen = str(item["name_gen"])
+                        for name in item.get("names", []):
+                            if name not in ref.points[pid].names:
+                                ref.points[pid].names.append(name)
             except Exception:  # noqa: BLE001, S110
                 pass
             self._ref = ref

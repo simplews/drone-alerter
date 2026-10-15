@@ -226,18 +226,30 @@ class MessageNormalizer:
             for alias, pat in alias_patterns:
                 for m in pat.finditer(line_norm):
                     s, e = m.span()
-                    if not any(es <= s < ee or es < e <= ee for es, ee in line_spans):
-                        line_spans.append((s, e))
-                        pid = alias_index[alias]
-                        raw_line_matches.append((pid, alias))
+                    if any(es <= s < ee or es < e <= ee for es, ee in line_spans):
+                        continue
+                    # A settlement alias without district suffix should not match if immediately
+                    # followed by a district qualifier (e.g. 'Камʼянець-Подільський р-н' should not
+                    # match the city 'Камʼянець-Подільський').
+                    is_raion_alias = bool(re.search(r"(?i)\b(?:район\w*|р-н\w*|рн)\b", alias))
+                    if not is_raion_alias and re.match(r"^\s*(?:район\w*|р-н\w*|рн\b)", line_norm[e:]):
+                        continue
+
+                    line_spans.append((s, e))
+                    pid = alias_index[alias]
+                    raw_line_matches.append((pid, alias))
 
             # If a specific settlement is present on this line, generic raion qualifiers
-            # (e.g. "Чернелиця, Коломийський район") are administrative clarifications and should
-            # not trigger the raion center as a second point.
-            has_specific_settlement = any("район" not in alias for _, alias in raw_line_matches)
+            # (e.g. "Чернелиця, Коломийський район", "Дунаївці, Камʼянець-Подільський р-н")
+            # are administrative clarifications and should not trigger the raion center as a second point.
+            has_specific_settlement = any(
+                not re.search(r"(?i)\b(?:район\w*|р-н\w*|рн)\b", alias)
+                for _, alias in raw_line_matches
+            )
             line_points: list[str] = []
             for pid, alias in raw_line_matches:
-                if has_specific_settlement and "район" in alias:
+                is_raion_alias = bool(re.search(r"(?i)\b(?:район\w*|р-н\w*|рн)\b", alias))
+                if has_specific_settlement and is_raion_alias:
                     continue
                 if pid not in line_points:
                     line_points.append(pid)
