@@ -23,7 +23,13 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         siren_state = MagicMock(is_active=False, region="Івано-Франківська область", changed_at="2026-10-14 18:00:00")
         self.siren_service.get_current_state.return_value = siren_state
 
-        self.dp = create_bot_dispatcher(self.sub_repo, tracker=self.tracker, siren_service=self.siren_service)
+        self.feedback_repo = MagicMock()
+        self.dp = create_bot_dispatcher(
+            self.sub_repo,
+            tracker=self.tracker,
+            siren_service=self.siren_service,
+            feedback_repo=self.feedback_repo,
+        )
 
     def _get_handler(self, name: str):
         for h in self.dp.message.handlers:
@@ -44,6 +50,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/status", text)
         self.assertIn("/eta", text)
         self.assertIn("/howitworks", text)
+        self.assertIn("/feedback", text)
         self.assertIn("/disclaimer", text)
         self.assertIn("/test", text)
         self.assertIn("/stop", text)
@@ -181,6 +188,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
 
         await handler(msg)
         self.sub_repo.remove.assert_called_once_with(108)
+        self.feedback_repo.delete_user_tickets.assert_called_once_with(108)
         text = msg.answer.call_args[0][0]
         self.assertIn("Всі сповіщення зупинено", text)
         self.assertIn("/start", text)
@@ -192,4 +200,4 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         bot.set_my_commands.assert_called_once()
         cmds = bot.set_my_commands.call_args[0][0]
         cmd_names = [c.command for c in cmds]
-        self.assertEqual(cmd_names, ["status", "eta", "howitworks", "test", "disclaimer", "stop"])
+        self.assertEqual(cmd_names, ["status", "eta", "howitworks", "test", "feedback", "disclaimer", "stop"])

@@ -13,6 +13,7 @@ from aiogram.types import BotCommand, Message
 from src.engine.models import AlertEvent, AlertLevel, DroneType
 from src.learning.text import format_place_title
 from src.profile import get_profile
+from src.telegram.feedback import FeedbackRepository, register_feedback_handlers
 from src.utils.time import format_kyiv_time, now_kyiv
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,24 @@ class SubscriberRepository:
         return self.conn.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
 
 
-def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren_service=None) -> Dispatcher:
+def create_bot_dispatcher(
+    subscribers: SubscriberRepository,
+    tracker=None,
+    siren_service=None,
+    feedback_repo: FeedbackRepository | None = None,
+    feedback_chat_id: int | None = None,
+    feedback_admin_ids: list[int] | None = None,
+) -> Dispatcher:
     dp = Dispatcher()
+
+    if feedback_repo is None:
+        from src.config import settings
+        feedback_repo = FeedbackRepository(settings.subscribers_db_path)
+
+    from src.config import settings
+    f_chat_id = feedback_chat_id if feedback_chat_id is not None else settings.feedback_chat_id
+    f_admin_ids = feedback_admin_ids if feedback_admin_ids is not None else settings.feedback_admin_ids
+    register_feedback_handlers(dp, feedback_repo, feedback_chat_id=f_chat_id, admin_ids=f_admin_ids)
 
     def get_levels_text() -> str:
         texts = get_profile().texts
@@ -186,8 +203,9 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
             "/status — поточний стан тривоги та активні цілі\n"
             "/eta — таблиця рубежів коридору та орієнтовний час підльоту (ETA)\n"
             "/howitworks — як працює система, канали моніторингу та алгоритм\n"
-            "/disclaimer — безпекове застереження\n"
             "/test — перевірка звуку та налаштувань сповіщень\n"
+            "/feedback — зворотний звʼязок та повідомлення про помилку\n"
+            "/disclaimer — безпекове застереження\n"
             "/stop — зупинити сповіщення та видалити мій акаунт"
         )
         await message.answer(text, parse_mode="Markdown")
@@ -291,8 +309,10 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
     @dp.message(Command("stop"))
     async def cmd_stop(message: Message):
         subscribers.remove(message.chat.id)
+        if feedback_repo:
+            feedback_repo.delete_user_tickets(message.chat.id)
         await message.answer(
-            "Всі сповіщення зупинено. Ваш Telegram ID видалено зі списку отримувачів.\n\n"
+            "Всі сповіщення зупинено. Ваш Telegram ID видалено зі списку отримувачів та бази звернень.\n\n"
             "Якщо забажаєте відновити сповіщення у майбутньому, просто надішліть команду /start.",
             parse_mode="Markdown",
         )
@@ -307,6 +327,7 @@ async def setup_bot_commands(bot: Bot) -> None:
         BotCommand(command="eta", description="Таблиця рубежів та орієнтовний час"),
         BotCommand(command="howitworks", description="Як працює система та моніторинг"),
         BotCommand(command="test", description="Перевірити сповіщення та звук"),
+        BotCommand(command="feedback", description="Зворотний звʼязок та помилки"),
         BotCommand(command="disclaimer", description="Безпекове застереження"),
         BotCommand(command="stop", description="Зупинити отримання сповіщень"),
     ]

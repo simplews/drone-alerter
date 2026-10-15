@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,25 @@ class Settings(BaseSettings):
         "https://ubilling.net.ua/aerialalerts/?source=klimenko",
         "http://ubilling.net.ua/aerialalerts/",
     ]
+
+    # Feedback settings
+    feedback_chat_id: int | None = None
+    feedback_admin_ids: list[int] | str = []
+
+    @field_validator("feedback_admin_ids", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, v):
+        if isinstance(v, int):
+            return [v]
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                return json.loads(v)
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        return v
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
