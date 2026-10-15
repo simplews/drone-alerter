@@ -211,8 +211,8 @@ class TestAerialAlertService(unittest.IsolatedAsyncioTestCase):
             await app.on_siren_end(state_end)
             mock_broadcast.assert_called_once()
             call_args = mock_broadcast.call_args[0]
-            # Verify body contains "В Івано-Франківській області оголошено відбій повітряної тривоги"
-            self.assertIn("В **Івано-Франківській області** оголошено відбій повітряної тривоги", call_args[3])
+            # Verify body contains locative region and siren end notice
+            self.assertIn("За офіційними даними, в **Івано-Франківській області** оголошено відбій", call_args[3])
 
 
 if __name__ == "__main__":
