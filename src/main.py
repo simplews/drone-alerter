@@ -130,20 +130,22 @@ class Application:
                 await broadcast_alert(self.bot, self.subscriber_repo, alert)
 
     async def on_connection_lost(self) -> None:
-        logger.warning("Відправка системного попередження підписникам про втрату зв'язку...")
+        logger.warning("Відправка системного попередження підписникам про втрату звʼязку...")
         if self.bot:
             warning = (
-                "⚠️ **УВАГА: Тимчасовий збій моніторингу**\n\n"
-                "Втрачено з'єднання зі слухачем каналів. "
-                "Автоматичні сповіщення тимчасово не надходять.\n"
-                "Будь ласка, орієнтуйтеся на офіційну тривогу та повідомлення ОВА."
+                "⚠️ **УВАГА: тимчасовий збій моніторингу**\n\n"
+                "Втрачено звʼязок зі слухачем каналів, автоматичні сповіщення тимчасово не надходять.\n"
+                "Орієнтуйтеся на офіційну тривогу та повідомлення ОВА."
             )
             await broadcast_system_warning(self.bot, self.subscriber_repo, warning)
 
     async def on_connection_restored(self) -> None:
-        logger.info("Відправка повідомлення про відновлення зв'язку...")
+        logger.info("Відправка повідомлення про відновлення звʼязку...")
         if self.bot:
-            msg = "🟢 **З'єднання з моніторингом відновлено.** Система працює в штатному режимі."
+            msg = (
+                "🟢 **Звʼязок із моніторингом відновлено.** Система працює в штатному режимі.\n"
+                "Сповіщення за час збою могли бути пропущені."
+            )
             await broadcast_system_warning(self.bot, self.subscriber_repo, msg)
 
     async def on_siren_start(self, state: SirenState) -> None:
@@ -166,8 +168,8 @@ class Application:
             region_text = get_profile().texts.get("region_loc", state.region)
             title = "🟢 **ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"В **{region_text}** оголошено відбій повітряної тривоги (о {time_str}).\n\n"
-                f"Загроза минула. Будьте уважні та бережіть себе!"
+                f"За офіційними даними, в **{region_text}** оголошено відбій (о {time_str}).\n"
+                "Залишайтеся уважними: нові цілі можливі. Слідкуйте за повідомленнями ОВА та Повітряних сил."
             )
             await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)
 
