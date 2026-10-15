@@ -46,7 +46,8 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.sub_repo.add.assert_called_once_with(100)
         msg.answer.assert_called_once()
         text = msg.answer.call_args[0][0]
-        self.assertIn("Вітаємо в системі завчасного попередження", text)
+        self.assertIn("Вітаємо!", text)
+        self.assertIn("Головне правило", text)
         self.assertIn("/status", text)
         self.assertIn("/eta", text)
         self.assertIn("/howitworks", text)
@@ -108,7 +109,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         text = msg.answer.call_args[0][0]
         self.assertIn("Зафіксовано активних цілей на коридорі: 1", text)
         self.assertIn("Нова Ушиця", text)
-        self.assertIn("🟡 Рівень 1 (Потенційна загроза)", text)
+        self.assertIn("🟡 Потенційна загроза", text)
         self.assertIn("26–33 хв", text)
 
     async def test_cmd_status_regional_target(self):
@@ -132,7 +133,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         text = msg.answer.call_args[0][0]
         self.assertIn("Коломия", text)
         self.assertIn("ℹ️ Загроза в області (ймовірна тривога)", text)
-        self.assertIn("загроза району області (курс не на ІФ)", text)
+        self.assertIn("загроза району області (курс не на Франківськ)", text)
 
     async def test_cmd_eta(self):
         handler = self._get_handler("cmd_eta")
@@ -169,7 +170,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         await handler(msg)
         text = msg.answer.call_args[0][0]
         self.assertIn("БЕЗПЕКОВЕ ЗАСТЕРЕЖЕННЯ (ДИСКЛЕЙМЕР)", text)
-        self.assertIn("Не є офіційним джерелом", text)
+        self.assertIn("Бот не є офіційним джерелом", text)
 
     async def test_cmd_test(self):
         handler = self._get_handler("cmd_test")
@@ -178,7 +179,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
 
         await handler(msg)
         text = msg.answer.call_args[0][0]
-        self.assertIn("[ТЕСТ] ТЕХНІЧНЕ СПОВІЩЕННЯ СИСТЕМИ", text)
+        self.assertIn("[ТЕСТ] Технічне сповіщення", text)
         self.assertIn("Реальної загрози немає", text)
 
     async def test_cmd_stop(self):
@@ -190,7 +191,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.sub_repo.remove.assert_called_once_with(108)
         self.feedback_repo.delete_user_tickets.assert_called_once_with(108)
         text = msg.answer.call_args[0][0]
-        self.assertIn("Всі сповіщення зупинено", text)
+        self.assertIn("Сповіщення вимкнено", text)
         self.assertIn("/start", text)
 
     async def test_setup_bot_commands(self):

@@ -129,7 +129,7 @@ class FeedbackHandlersTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(current_state, FeedbackStates.waiting_for_feedback.state)
         msg.answer.assert_called_once()
         text = msg.answer.call_args[0][0]
-        self.assertIn("Напиши, що варто покращити", text)
+        self.assertIn("Напишіть, що варто покращити", text)
         self.assertIn("/cancel", text)
 
     async def test_cmd_feedback_rate_limit(self):
