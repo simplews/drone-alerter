@@ -66,17 +66,29 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                 2: ("🟠 **Рівень 2 — Наближення (гучне сповіщення):**", []),
                 3: ("🔴 **Рівень 3 — Безпосередня небезпека (термінове гучне сповіщення):**", []),
             }
-            for p in sorted(ref.points.values(), key=lambda pt: pt.distance_km, reverse=True):
-                if p.level in groups:
+            regional_items = []
+            for p in sorted(ref.points.values(), key=lambda pt: pt.distance_km or 0.0, reverse=True):
+                if getattr(p, "is_regional", False):
+                    p_name = format_place_title(p.names[0]) if p.names else p.id
+                    dist_str = f"~{p.distance_km:.0f} км" if p.distance_km else "—"
+                    sound_note = "гучне сповіщення" if (p.distance_km or 0.0) <= 30.0 else "тихе сповіщення"
+                    regional_items.append(f"• **{p_name}:** {dist_str} від ІФ ({sound_note}) | загроза району області")
+                elif p.level in groups:
                     p_name = format_place_title(p.names[0]) if p.names else p.id
                     eta_str = f"**{p.eta_min:.0f}–{p.eta_max:.0f} хв**" if p.eta_min is not None and p.eta_max is not None else "—"
                     extra = " | рубежі передмістя" if p.id in ("khryplyn", "tysmenytsia") else ""
                     groups[p.level][1].append(f"• **{p_name}:** ~{p.distance_km:.0f} км{extra} | орієнтовно {eta_str}")
-            res = "\n\n".join(
+            res_blocks = [
                 title + "\n" + "\n".join(items)
                 for title, items in groups.values()
                 if items
-            )
+            ]
+            if regional_items:
+                res_blocks.append(
+                    "ℹ️ **Регіональні вектори загроз (ймовірна тривога в області):**\n"
+                    + "\n".join(regional_items)
+                )
+            res = "\n\n".join(res_blocks)
             if res.strip():
                 return res
 
@@ -238,6 +250,7 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
                 AlertLevel.LEVEL_2: "🟠 Рівень 2 (Наближення)",
                 AlertLevel.LEVEL_3A: "🔴 Рівень 3A (Безпосередня небезпека)",
                 AlertLevel.LEVEL_3B: "🔴 Рівень 3B (Небезпека біля / над містом)",
+                AlertLevel.REGIONAL: "ℹ️ Загроза в області (ймовірна тривога)",
             }
             for idx, t in enumerate(active, 1):
                 eta_str = f"{t.eta_min_minutes:.0f}–{t.eta_max_minutes:.0f} хв"
@@ -259,11 +272,15 @@ def create_bot_dispatcher(subscribers: SubscriberRepository, tracker=None, siren
 
                 lvl_display = level_labels.get(t.level, t.level.value)
                 drone_label = "Шахед" if getattr(t, "drone_type", None) == DroneType.CONVENTIONAL else "реактивний"
+                if t.level == AlertLevel.REGIONAL:
+                    threat_line = "  Очікування: **загроза району області (курс не на ІФ)**\n"
+                else:
+                    threat_line = f"  Очікування біля міста: **{eta_str}**\n"
                 lines.append(
                     f"• **Ціль #{idx}** ({t.target_count}х • {drone_label})\n"
                     f"  Останній пункт: **{point_name}** (о {last_seen_k})\n"
                     f"  Статус: {lvl_display}\n"
-                    f"  Очікування біля міста: **{eta_str}**\n"
+                    f"{threat_line}"
                 )
 
         now_str = now_kyiv().strftime("%H:%M:%S")

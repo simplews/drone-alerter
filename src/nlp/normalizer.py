@@ -221,16 +221,26 @@ class MessageNormalizer:
                 continue
 
             # Find corridor points on this specific line
-            line_points: list[str] = []
+            raw_line_matches: list[tuple[str, str]] = []  # (point_id, matched_alias)
             line_spans: list[tuple[int, int]] = []
             for alias, pat in alias_patterns:
                 for m in pat.finditer(line_norm):
                     s, e = m.span()
-                    if not any( es <= s < ee or es < e <= ee for es, ee in line_spans):
+                    if not any(es <= s < ee or es < e <= ee for es, ee in line_spans):
                         line_spans.append((s, e))
                         pid = alias_index[alias]
-                        if pid not in line_points:
-                            line_points.append(pid)
+                        raw_line_matches.append((pid, alias))
+
+            # If a specific settlement is present on this line, generic raion qualifiers
+            # (e.g. "Чернелиця, Коломийський район") are administrative clarifications and should
+            # not trigger the raion center as a second point.
+            has_specific_settlement = any("район" not in alias for _, alias in raw_line_matches)
+            line_points: list[str] = []
+            for pid, alias in raw_line_matches:
+                if has_specific_settlement and "район" in alias:
+                    continue
+                if pid not in line_points:
+                    line_points.append(pid)
 
             # If line mentions distant areas without corridor points,
             # it should not trigger actions (divert/downed/lost) for corridor targets

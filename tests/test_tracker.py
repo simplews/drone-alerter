@@ -458,6 +458,61 @@ class TestTargetTracker(unittest.TestCase):
         types = {t.drone_type for t in active}
         self.assertEqual(types, {DroneType.JET, DroneType.CONVENTIONAL})
 
+    def test_regional_alert_kolomyia_silent(self):
+        # Kolomyia (55 km, >30 km -> silent push, informational alert)
+        p = RawPost("chan_a", 701, "Реактивна герань на Коломию", T0)
+        alerts = self.tracker.process_message(p, self.normalizer.parse(p), now=T0)
+        self.assertEqual(len(alerts), 1)
+        alert = alerts[0]
+        self.assertEqual(alert.level, AlertLevel.REGIONAL)
+        self.assertTrue(alert.is_silent)
+        self.assertIn("Рух у напрямку Коломиї", alert.title)
+        self.assertIn("~55 км від ІФ", alert.title)
+        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+
+    def test_regional_alert_bohorodchany_loud(self):
+        # Bohorodchany (18 km, <=30 km -> loud push)
+        p = RawPost("chan_a", 702, "Реактивний шахед у районі Богородчан", T0)
+        alerts = self.tracker.process_message(p, self.normalizer.parse(p), now=T0)
+        self.assertEqual(len(alerts), 1)
+        alert = alerts[0]
+        self.assertEqual(alert.level, AlertLevel.REGIONAL)
+        self.assertFalse(alert.is_silent)
+        self.assertIn("Рух у напрямку Богородчан", alert.title)
+        self.assertIn("~18 км від ІФ", alert.title)
+        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+
+    def test_regional_escalation_to_level_3a(self):
+        # 1. Target at Kolomyia (regional)
+        p1 = RawPost("chan_a", 703, "БпЛА біля Коломиї", T0)
+        alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+        self.assertEqual(len(alerts1), 1)
+        self.assertEqual(alerts1[0].level, AlertLevel.REGIONAL)
+
+        # 2. Target turns towards Tlumach (Level 3A, approaching IF)
+        t2 = T0 + timedelta(minutes=5)
+        p2 = RawPost("chan_a", 704, "Ціль з Коломиї на Тлумач", t2)
+        alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
+        real_alerts2 = [a for a in alerts2 if not a.is_update]
+        self.assertEqual(len(real_alerts2), 1)
+        self.assertEqual(real_alerts2[0].level, AlertLevel.LEVEL_3A)
+        self.assertFalse(real_alerts2[0].is_silent)
+        self.assertIn("Тлумач", real_alerts2[0].title)
+
+    def test_regional_isolation_from_distant_corridor(self):
+        # 1. Target at Vendychany (180 km)
+        p1 = RawPost("chan_a", 705, "Реактивна герань повз Вендичани", T0)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+
+        # 2. Simultaneous report from Kolomyia (55 km, jump of 125 km)
+        t2 = T0 + timedelta(minutes=2)
+        p2 = RawPost("chan_b", 706, "Реактивний дрон на Коломию", t2)
+        self.tracker.process_message(p2, self.normalizer.parse(p2), now=t2)
+
+        # Must not merge: must be 2 distinct active targets
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

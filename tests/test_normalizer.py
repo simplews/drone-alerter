@@ -204,6 +204,19 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed3.drone_type, DroneType.CONVENTIONAL)
         self.assertFalse(parsed3.is_jet)
 
+    def test_raion_disambiguation_with_specific_settlement(self):
+        # When a post mentions a specific settlement and its district on the same line,
+        # the district center should be suppressed in favor of the specific settlement.
+        p1 = RawPost("chan_a", 20, "Чернелиця, Коломийський район", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, ["chernelytsia"])
+
+    def test_standalone_raion_detection(self):
+        # When only the district is mentioned, the regional center point is identified.
+        p1 = RawPost("chan_a", 21, "Шахед у Коломийському районі", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, ["kolomyia"])
+
 
 if __name__ == "__main__":
     unittest.main()
