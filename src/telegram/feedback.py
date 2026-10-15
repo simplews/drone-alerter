@@ -1,12 +1,14 @@
 """Feedback repository and Telegram handlers for user feedback and admin replies."""
 from __future__ import annotations
 
+import html
 import logging
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -183,27 +185,56 @@ def register_feedback_handlers(
 
         try:
             # 1. Format metadata for admin chat
-            user_name = message.from_user.full_name if message.from_user else "Користувач"
-            user_handle = f" (@{message.from_user.username})" if message.from_user and message.from_user.username else ""
-            header = f"💬 **Звернення** від {user_name}{user_handle} (`{message.chat.id}`):\n\n"
+            raw_user_name = message.from_user.full_name if message.from_user and message.from_user.full_name else "Користувач"
+            raw_user_handle = f" (@{message.from_user.username})" if message.from_user and message.from_user.username else ""
+            user_name_html = html.escape(raw_user_name)
+            user_handle_html = f" (@{html.escape(message.from_user.username)})" if message.from_user and message.from_user.username else ""
 
-            # 2. Forward / deliver to admin chat
+            header_html = f"💬 <b>Звернення</b> від {user_name_html}{user_handle_html} (<code>{message.chat.id}</code>):\n\n"
+            header_plain = f"💬 Звернення від {raw_user_name}{raw_user_handle} ({message.chat.id}):\n\n"
+
+            # 2. Forward / deliver to admin chat safely
             if message.text:
-                admin_msg = await bot.send_message(
-                    chat_id=feedback_chat_id,
-                    text=f"{header}{message.text}",
-                    parse_mode="Markdown",
-                )
+                body_html = html.escape(message.text)
+                try:
+                    admin_msg = await bot.send_message(
+                        chat_id=feedback_chat_id,
+                        text=f"{header_html}{body_html}",
+                        parse_mode="HTML",
+                    )
+                except TelegramBadRequest:
+                    admin_msg = await bot.send_message(
+                        chat_id=feedback_chat_id,
+                        text=f"{header_plain}{message.text}",
+                        parse_mode=None,
+                    )
             else:
-                caption = header
+                caption_html = header_html
+                caption_plain = header_plain
                 if message.caption:
-                    caption += message.caption
-                admin_msg = await bot.send_photo(
-                    chat_id=feedback_chat_id,
-                    photo=message.photo[-1].file_id,
-                    caption=caption,
-                    parse_mode="Markdown",
-                )
+                    caption_html += html.escape(message.caption)
+                    caption_plain += message.caption
+
+                # Telegram photo caption limit is 1024 characters
+                if len(caption_html) > 1024:
+                    caption_html = caption_html[:1020] + "..."
+                if len(caption_plain) > 1024:
+                    caption_plain = caption_plain[:1020] + "..."
+
+                try:
+                    admin_msg = await bot.send_photo(
+                        chat_id=feedback_chat_id,
+                        photo=message.photo[-1].file_id,
+                        caption=caption_html,
+                        parse_mode="HTML",
+                    )
+                except TelegramBadRequest:
+                    admin_msg = await bot.send_photo(
+                        chat_id=feedback_chat_id,
+                        photo=message.photo[-1].file_id,
+                        caption=caption_plain,
+                        parse_mode=None,
+                    )
 
             # 3. Save ticket
             ticket_id = repo.create_ticket(
@@ -242,23 +273,45 @@ def register_feedback_handlers(
                 return
 
             user_chat_id = ticket["user_chat_id"]
-            reply_prefix = "💬 **Відповідь розробника:**\n\n"
+            reply_prefix_html = "💬 <b>Відповідь розробника:</b>\n\n"
+            reply_prefix_plain = "💬 Відповідь розробника:\n\n"
 
             try:
                 if message.text:
-                    await bot.send_message(
-                        chat_id=user_chat_id,
-                        text=f"{reply_prefix}{message.text}",
-                        parse_mode="Markdown",
-                    )
+                    try:
+                        await bot.send_message(
+                            chat_id=user_chat_id,
+                            text=f"{reply_prefix_html}{html.escape(message.text)}",
+                            parse_mode="HTML",
+                        )
+                    except TelegramBadRequest:
+                        await bot.send_message(
+                            chat_id=user_chat_id,
+                            text=f"{reply_prefix_plain}{message.text}",
+                            parse_mode=None,
+                        )
                 elif message.photo:
-                    cap = f"{reply_prefix}{message.caption or ''}"
-                    await bot.send_photo(
-                        chat_id=user_chat_id,
-                        photo=message.photo[-1].file_id,
-                        caption=cap,
-                        parse_mode="Markdown",
-                    )
+                    raw_caption = message.caption or ""
+                    cap_html = f"{reply_prefix_html}{html.escape(raw_caption)}"
+                    cap_plain = f"{reply_prefix_plain}{raw_caption}"
+                    if len(cap_html) > 1024:
+                        cap_html = cap_html[:1020] + "..."
+                    if len(cap_plain) > 1024:
+                        cap_plain = cap_plain[:1020] + "..."
+                    try:
+                        await bot.send_photo(
+                            chat_id=user_chat_id,
+                            photo=message.photo[-1].file_id,
+                            caption=cap_html,
+                            parse_mode="HTML",
+                        )
+                    except TelegramBadRequest:
+                        await bot.send_photo(
+                            chat_id=user_chat_id,
+                            photo=message.photo[-1].file_id,
+                            caption=cap_plain,
+                            parse_mode=None,
+                        )
                 else:
                     await bot.copy_message(
                         chat_id=user_chat_id,

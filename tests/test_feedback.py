@@ -6,6 +6,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 from aiogram import Dispatcher
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -343,3 +344,68 @@ class FeedbackHandlersTests(unittest.IsolatedAsyncioTestCase):
 
         self.bot.send_message.assert_not_called()
         admin_reply_msg.reply.assert_not_called()
+
+    async def test_process_feedback_with_raw_markdown_and_underscores(self):
+        user_chat_id = 777
+        state = self._get_fsm_context(chat_id=user_chat_id, user_id=user_chat_id)
+        await state.set_state(FeedbackStates.waiting_for_feedback)
+
+        # Username with underscores and unclosed markdown in message text
+        user_from = MagicMock(spec=User, id=user_chat_id, full_name="User <Test>", username="ivan_test_under")
+        msg = MagicMock(
+            spec=Message,
+            chat=MagicMock(spec=Chat, id=user_chat_id),
+            from_user=user_from,
+            text="чому _невідомо_ *без пари [не закрите",
+            photo=None,
+            message_id=140,
+        )
+        msg.answer = AsyncMock()
+
+        admin_sent_msg = MagicMock(spec=Message, message_id=890)
+        self.bot.send_message.return_value = admin_sent_msg
+
+        handler = self.dp.message.handlers[2].callback
+        await handler(msg, state, self.bot)
+
+        self.assertIsNone(await state.get_state())
+        self.bot.send_message.assert_called_once()
+        admin_call_kwargs = self.bot.send_message.call_args[1]
+        self.assertEqual(admin_call_kwargs["parse_mode"], "HTML")
+        self.assertIn("&lt;Test&gt;", admin_call_kwargs["text"])
+        self.assertIn("@ivan_test_under", admin_call_kwargs["text"])
+        msg.answer.assert_called_once()
+        self.assertIn("Дякуємо за відгук", msg.answer.call_args[0][0])
+
+    async def test_process_feedback_fallback_on_bad_request(self):
+        user_chat_id = 777
+        state = self._get_fsm_context(chat_id=user_chat_id, user_id=user_chat_id)
+        await state.set_state(FeedbackStates.waiting_for_feedback)
+
+        user_from = MagicMock(spec=User, id=user_chat_id, full_name="Test User", username="test")
+        msg = MagicMock(
+            spec=Message,
+            chat=MagicMock(spec=Chat, id=user_chat_id),
+            from_user=user_from,
+            text="Some text",
+            photo=None,
+            message_id=141,
+        )
+        msg.answer = AsyncMock()
+
+        admin_sent_msg = MagicMock(spec=Message, message_id=891)
+        # First call fails with TelegramBadRequest, second call (fallback) succeeds
+        bad_request = TelegramBadRequest(method=MagicMock(), message="can't parse entities")
+        self.bot.send_message.side_effect = [bad_request, admin_sent_msg]
+
+        handler = self.dp.message.handlers[2].callback
+        await handler(msg, state, self.bot)
+
+        self.assertIsNone(await state.get_state())
+        self.assertEqual(self.bot.send_message.call_count, 2)
+        # Verify fallback call had parse_mode=None
+        fallback_call_kwargs = self.bot.send_message.call_args_list[1][1]
+        self.assertIsNone(fallback_call_kwargs["parse_mode"])
+        msg.answer.assert_called_once()
+        self.assertIn("Дякуємо за відгук", msg.answer.call_args[0][0])
+
