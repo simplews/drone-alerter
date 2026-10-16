@@ -44,6 +44,9 @@ _TERNOPIL_LVIV_DEST_RE = re.compile(
 _LVIV_BORDER_DEST_RE = re.compile(
     r"(?i)\b(перемишлян\w*|поморян\w*|львів\w*|винник\w*|стрий\w*|жидaчів\w*|ходарів\w*|рогатин\w*)\b"
 )
+_CARDINAL_DEST_RE = re.compile(
+    r"(?i)\b(північ\w*|південь\w*|південн\w*|схід\w*|східн\w*|захід\w*|західн\w*)\b"
+)
 
 
 class TargetTracker:
@@ -83,33 +86,43 @@ class TargetTracker:
         is_regional: bool,
         dest: str | None,
     ) -> bool:
-        """Check if a divert destination is geographically compatible with the target's corridor position."""
+        """Check if an unanchored divert destination is geographically compatible with the target's corridor position."""
+        dest_norm = normalize(dest) if dest else ""
+
+        # If a specific destination is named without a corridor action_point_id,
+        # it must be a known corridor divert destination or cardinal direction (never an unknown settlement like "Головне").
+        if dest_norm:
+            if _FAR_NORTH_DEST_RE.search(dest_norm):
+                return False
+            is_known_corridor_dest = bool(
+                _CARDINAL_DEST_RE.search(dest_norm)
+                or _EAST_UPSTREAM_DEST_RE.search(dest_norm)
+                or _KHMELNYTSKYI_DEST_RE.search(dest_norm)
+                or _TERNOPIL_LVIV_DEST_RE.search(dest_norm)
+                or _LVIV_BORDER_DEST_RE.search(dest_norm)
+            )
+            if not is_known_corridor_dest:
+                return False
+
         if target_dist_km is None:
             return True
-
-        dest_norm = normalize(dest) if dest else ""
 
         # 1. Targets already inside Ivano-Frankivsk oblast (<= 65 km or Level 3A/3B)
         if target_dist_km <= 65.0 or target_level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B):
             return bool(is_regional and dest_norm and _LVIV_BORDER_DEST_RE.search(dest_norm))
 
-        # 2. Far-north destinations (Rivne, Volyn, Dubno, Shepetivka, Kremenets, Shumsk, Zhytomyr)
-        # do not apply to southern-corridor targets without an explicit corridor point on the same line
-        if dest_norm and _FAR_NORTH_DEST_RE.search(dest_norm):
-            return False
-
-        # 3. Targets in Southern Ternopilska oblast (65 < d < 120 km: Skala-Podilska, Borshchiv, Tovste)
+        # 2. Targets in Southern Ternopilska oblast (65 < d < 120 km: Skala-Podilska, Borshchiv, Tovste)
         if target_dist_km < 120.0:
             return not bool(
                 dest_norm and (_EAST_UPSTREAM_DEST_RE.search(dest_norm) or _KHMELNYTSKYI_DEST_RE.search(dest_norm))
             )
 
-        # 4. Targets in Southern Khmelnytskyi (120 <= d <= 195 km: Kamianets-Podilskyi, Dunaivtsi, Stara/Nova Ushytsia)
+        # 3. Targets in Southern Khmelnytskyi (120 <= d <= 195 km: Kamianets-Podilskyi, Dunaivtsi, Stara/Nova Ushytsia)
         if target_dist_km <= 195.0:
             # Shargorod is upstream in Vinnytsia (~235 km) and cannot divert a target already at Kamianets/Dunaivtsi
             return not bool(dest_norm and re.search(r"(?i)\bшаргород\w*\b", dest_norm) and target_dist_km < 180.0)
 
-        # 5. Far upstream targets in Vinnytsia (> 195 km: Pishchanka, Vendychany, Murovani Kyrylivtsi)
+        # 4. Far upstream targets in Vinnytsia (> 195 km: Pishchanka, Vendychany, Murovani Kyrylivtsi)
         return True
 
     def _find_matching_target(
@@ -242,8 +255,15 @@ class TargetTracker:
             alerts.extend(self.check_timeouts(now))
             return alerts
 
-        # If the post has no point mentions, stop here
+        # If the post has no point mentions, link reply chains if replying to a tracked target message, then stop
         if not parsed.points:
+            if post.reply_to_message_id is not None:
+                for t in self.get_active_targets():
+                    if (
+                        (post.channel, post.reply_to_message_id) in t.message_ids
+                        and (post.channel, post.message_id) not in t.message_ids
+                    ):
+                        t.message_ids.append((post.channel, post.message_id))
             alerts.extend(self.check_timeouts(now))
             return alerts
 
@@ -457,10 +477,20 @@ class TargetTracker:
             if target is None:
                 return alerts
 
-        # 2. If no action_point_id was mentioned, match against active targets with stage/time validation
+        # 2. If no action_point_id was mentioned, match against active targets with stage/time/reply validation
         elif self._active_targets:
-            active_same_type = [t for t in self.get_active_targets() if t.drone_type == parsed.drone_type]
-            active_all = active_same_type if active_same_type else self.get_active_targets()
+            # If the action post is a reply to another message in the channel (e.g. "Відвернув на Головне"
+            # replying to a Kovel/Volyn post), it can ONLY apply to a target that actually includes
+            # the replied-to message ID in its history.
+            if post.reply_to_message_id is not None:
+                active_all = [
+                    t for t in self.get_active_targets()
+                    if (post.channel, post.reply_to_message_id) in t.message_ids
+                ]
+            else:
+                active_same_type = [t for t in self.get_active_targets() if t.drone_type == parsed.drone_type]
+                active_all = active_same_type if active_same_type else self.get_active_targets()
+
             active_sorted = sorted(active_all, key=lambda t: t.last_seen_utc, reverse=True)
 
             if parsed.action == ActionType.DIVERTED:
@@ -491,6 +521,9 @@ class TargetTracker:
 
         if target is None:
             return alerts
+
+        if (post.channel, post.message_id) not in target.message_ids:
+            target.message_ids.append((post.channel, post.message_id))
 
         point_name = format_place_title(target.last_point_id)
         if target.last_point_id in ref.points and ref.points[target.last_point_id].names:
@@ -587,31 +620,38 @@ class TargetTracker:
         if target.level == AlertLevel.REGIONAL or getattr(point, "is_regional", False):
             name_gen = getattr(point, "name_gen", "") or point_display
             dist = point.distance_km or 0.0
-            title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Ймовірна тривога в області"
-            body = (
-                f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
-                f"(~{dist:.0f} км від Івано-Франківська).\n\n"
-                f"🚨 **Найімовірніше, в області буде оголошено тривогу.**\n"
-                f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
-                f"Слідкуйте за офіційними повідомленнями та будьте готові перейти в укриття."
-            )
+            if self._is_siren_active_fn():
+                title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Загроза в області"
+                body = (
+                    f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
+                    f"(~{dist:.0f} км від Івано-Франківська).\n\n"
+                    f"🚨 **В області триває повітряна тривога.**\n"
+                    f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
+                    f"Залишайтеся в укриттях до офіційного відбою та слідкуйте за офіційними повідомленнями."
+                )
+            else:
+                title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Ймовірна тривога в області"
+                body = (
+                    f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
+                    f"(~{dist:.0f} км від Івано-Франківська).\n\n"
+                    f"🚨 **Найімовірніше, в області буде оголошено тривогу.**\n"
+                    f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
+                    f"Слідкуйте за офіційними повідомленнями та будьте готові перейти в укриття."
+                )
             is_silent = (dist > 30.0)
 
         elif target.level in (AlertLevel.LEVEL_1, AlertLevel.LEVEL_2, AlertLevel.LEVEL_3A):
-            if target.eta_min_minutes is not None and target.eta_max_minutes is not None:
-                eta_duration = f" (≈{target.eta_min_minutes:.0f}–{target.eta_max_minutes:.0f} хв)"
-            else:
-                eta_duration = ""
-            body = f"⏱ Очікується біля міста: **{window_str}**{eta_duration}"
-
             if target.level == AlertLevel.LEVEL_1:
                 title = f"🟡 {count_prefix}Потенційна загроза{type_suffix}: {point_display}"
+                body = f"⏱ У разі руху в напрямку міста — орієнтовно: **{window_str}**"
                 is_silent = True
             elif target.level == AlertLevel.LEVEL_2:
                 title = f"🟠 {count_prefix}Наближення{type_suffix}: {point_display}"
+                body = f"⏱ Орієнтовний час підльоту (якщо курс збережеться): **{window_str}**"
                 is_silent = False
             else:  # LEVEL_3A
                 title = f"🔴 {count_prefix}Небезпека (підліт){type_suffix}: {point_display}"
+                body = f"⏱ Орієнтовний час підльоту до міста: **{window_str}**"
                 is_silent = False
 
         else:  # LEVEL_3B
@@ -730,7 +770,7 @@ class TargetTracker:
 
                 body = (
                     "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
-                    "Імовірно, змінила курс або втрачена, але це не означає, що загрози немає. "
+                    "Імовірно, змінила курс або втрачена, однак загроза може повторитися. "
                     "Слідкуйте за офіційними повідомленнями."
                 )
                 alerts.append(AlertEvent(

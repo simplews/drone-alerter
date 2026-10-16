@@ -135,6 +135,19 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ℹ️ Загроза в області (ймовірна тривога)", text)
         self.assertIn("загроза району області (курс не на Франківськ)", text)
 
+        # When official siren is active, do not say "(ймовірна тривога)"
+        self.siren_service.get_current_state.return_value = MagicMock(
+            is_active=True,
+            region="Івано-Франківська область",
+            changed_at="2026-10-16 07:34:00",
+        )
+        msg_active = MagicMock(spec=Message, text="/status", chat=MagicMock(spec=Chat, id=109))
+        msg_active.answer = AsyncMock()
+        await handler(msg_active)
+        text_active = msg_active.answer.call_args[0][0]
+        self.assertIn("ℹ️ Загроза в області\n", text_active)
+        self.assertNotIn("ймовірна тривога", text_active)
+
     async def test_cmd_eta(self):
         handler = self._get_handler("cmd_eta")
         msg = MagicMock(spec=Message, text="/eta", chat=MagicMock(spec=Chat, id=104))

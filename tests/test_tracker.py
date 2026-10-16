@@ -483,6 +483,20 @@ class TestTargetTracker(unittest.TestCase):
         self.assertIn("~18 км від Франківська", alert.title)
         self.assertIn("Найімовірніше, в області буде оголошено тривогу.", alert.body)
 
+    def test_regional_alert_with_active_siren(self):
+        tracker_siren = TargetTracker(self.cache, is_siren_active_fn=lambda: True)
+        p = RawPost("kudy_letyt", 7021, "Реактивний БпЛА на Калуш", T0)
+        alerts = tracker_siren.process_message(p, self.normalizer.parse(p), now=T0)
+        self.assertEqual(len(alerts), 1)
+        alert = alerts[0]
+        self.assertEqual(alert.level, AlertLevel.REGIONAL)
+        self.assertIn("Рух у напрямку Калуша", alert.title)
+        self.assertIn("Загроза в області", alert.title)
+        self.assertNotIn("Ймовірна тривога в області", alert.title)
+        self.assertIn("В області триває повітряна тривога.", alert.body)
+        self.assertIn("Залишайтеся в укриттях до офіційного відбою", alert.body)
+        self.assertNotIn("буде оголошено тривогу", alert.body)
+
     def test_regional_escalation_to_level_3a(self):
         # 1. Target at Kolomyia (regional)
         p1 = RawPost("chan_a", 703, "БпЛА біля Коломиї", T0)
@@ -650,6 +664,65 @@ class TestTargetTracker(unittest.TestCase):
         active = self.tracker.get_active_targets()
         self.assertEqual(len(active), 1)
         self.assertEqual(active[0].points_sequence, ["murovani_kyrylivtsi", "dunaivtsi"])
+
+    def test_reply_to_unrelated_post_and_unknown_divert_destination(self):
+        """Replicate 16 Oct 16:53 incident:
+        - Target active at Nova Ushytsia (kudy_letyt/124270)
+        - kudy_letyt/124283 reports drone in Volyn (Kovel -> Liuboml -> Yahodyn)
+        - kudy_letyt/124284 replies to 124283 with 'Відвернув на Головне'
+        Must NOT divert the Nova Ushytsia target (both with and without reply_to_message_id).
+        """
+        t0 = datetime(2026, 10, 16, 13, 45, 0, tzinfo=UTC)
+        p_target = RawPost("kudy_letyt", 124270, "Реактивний БпЛА на Нову Ушицю", t0)
+        self.tracker.process_message(p_target, self.normalizer.parse(p_target), now=t0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Unrelated Volyn post
+        t1 = t0 + timedelta(minutes=6)
+        p_volyn = RawPost(
+            "kudy_letyt",
+            124283,
+            'Реактивний БпЛА пролетів Ковель повз Любомль курсом на Пункт пропуску для автомобільного сполучення "Ягодин"',
+            t1,
+        )
+        self.assertEqual(self.tracker.process_message(p_volyn, self.normalizer.parse(p_volyn), now=t1), [])
+
+        # 1. Reply to 124283: "Відвернув на Головне"
+        t2 = t0 + timedelta(minutes=8)
+        p_reply = RawPost("kudy_letyt", 124284, "Відвернув на Головне", t2, reply_to_message_id=124283)
+        alerts_reply = self.tracker.process_message(p_reply, self.normalizer.parse(p_reply), now=t2)
+        self.assertEqual(alerts_reply, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 2. Even without reply_to_message_id, an unknown destination outside corridor ("Відвернув на Олевськ")
+        # must NOT divert the Nova Ushytsia target
+        p_unknown = RawPost("kudy_letyt", 124285, "Відвернув на Олевськ", t2 + timedelta(seconds=30))
+        alerts_unknown = self.tracker.process_message(
+            p_unknown, self.normalizer.parse(p_unknown), now=t2 + timedelta(seconds=30)
+        )
+        self.assertEqual(alerts_unknown, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 3. Generic reply "Відвернув на північ" to unrelated 124283 must NOT divert 124270
+        p_generic_unrel = RawPost(
+            "kudy_letyt", 124286, "Відвернув на північ", t2 + timedelta(minutes=1), reply_to_message_id=124283
+        )
+        alerts_gen_unrel = self.tracker.process_message(
+            p_generic_unrel, self.normalizer.parse(p_generic_unrel), now=t2 + timedelta(minutes=1)
+        )
+        self.assertEqual(alerts_gen_unrel, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 4. Reply to the actual target message (124270) with a valid corridor divert DOES divert it
+        p_valid_reply = RawPost(
+            "kudy_letyt", 124287, "Відвернув на північ", t2 + timedelta(minutes=2), reply_to_message_id=124270
+        )
+        alerts_valid = self.tracker.process_message(
+            p_valid_reply, self.normalizer.parse(p_valid_reply), now=t2 + timedelta(minutes=2)
+        )
+        self.assertEqual(len(alerts_valid), 1)
+        self.assertEqual(alerts_valid[0].title, "Ціль змінила курс")
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
 
 
 if __name__ == "__main__":
