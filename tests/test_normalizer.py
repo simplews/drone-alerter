@@ -248,7 +248,81 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed = self.normalizer.parse(post)
         self.assertEqual(parsed.points, ["kamianets_podilskyi"])
 
+    def test_markdown_bold_distant_section_header_ignored(self):
+        # **Кіровоградщина:** with trailing ** must be recognized as a distant section header
+        # so "БпЛА курсом на Камʼянець" (Novhorodka in Kirovohrad region) does NOT trigger Kamianets-Podilskyi
+        text = (
+            "**Київ:**\n"
+            "Реактивний БпЛА над містом\n\n"
+            "**Кіровоградщина:**\n"
+            "БпЛА курсом на Камʼянець\n"
+            "2х Реактивні БпЛА курсом на Павлиш"
+        )
+        post = RawPost("kudy_letyt", 123797, text, T0)
+        parsed = self.normalizer.parse(post)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
+    def test_locative_region_and_northern_track_not_parsed_as_corridor_divert(self):
+        # "на Рівненщині" / "на Тернопільщині" (locative) and northern-track messages must not trigger DIVERTED
+        for idx, msg in enumerate([
+            "📡Дорозвідка на Рівненщині!",
+            "Реактивний БпЛА повз Степань на Рівненщині",
+            "🏍 Реактивний БпЛА на заході Рівненщини, курс на Волинь.",
+            "🏍 Реактивний БпЛА з півночі Хмельниччини на Рівненщину.",
+            "Пішла все-таки на Волинь, Колки/Ківерці",
+            "**Рівненщина:**\nРеактивний БпЛА повз Городок залітає на Рівне",
+        ]):
+            post = RawPost("monitoring_zaxid", 28100 + idx, msg, T0)
+            parsed = self.normalizer.parse(post)
+            self.assertEqual(parsed.points, [], msg)
+            self.assertNotEqual(parsed.action, ActionType.DIVERTED, msg)
+
+    def test_preventive_and_section_header_reconnaissance_not_active_points(self):
+        # "**Коломия:**\nДорозвідка по БпЛА" and "Калуський район ... превентивано" must not trigger active points
+        p1 = RawPost("kudy_letyt", 123399, "**Коломия:**\nДорозвідка по БпЛА", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, [])
+        self.assertEqual(parsed1.action, ActionType.CLEAR)
+
+        p2 = RawPost(
+            "monitoring_zaxid",
+            28141,
+            "Калуський район Франківщини - дронова небезпека превентивано. В регіоні триває дорозвідка!",
+            T0,
+        )
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.points, [])
+        self.assertEqual(parsed2.action, ActionType.CLEAR)
+
+    def test_lost_fixation_and_defense_forces_engagement_actions(self):
+        # "Втрата фіксації цілі поблизу Коломиї" -> LOST at kolomyia
+        p_lost = RawPost("monitoring_zaxid", 28025, "📡Втрата фіксації цілі поблизу Коломиї, деталі від офіційних осіб.", T0)
+        parsed_lost = self.normalizer.parse(p_lost)
+        self.assertEqual(parsed_lost.points, [])
+        self.assertEqual(parsed_lost.action, ActionType.LOST)
+        self.assertEqual(parsed_lost.action_point_id, "kolomyia")
+
+        # "по тому, котрий летів на Нову Ушицю - працювали сили оборони" -> DOWNED at nova_ushytsia
+        p_down = RawPost(
+            "monitoring_zaxid",
+            28071,
+            "Рівненщина:\n1 реактивна герань на Дубно\n\nХмельниччина - дорозвідка, по тому, котрий летів на Нову Ушицю - працювали сили оборони",
+            T0,
+        )
+        parsed_down = self.normalizer.parse(p_down)
+        self.assertEqual(parsed_down.points, [])
+        self.assertEqual(parsed_down.action, ActionType.DOWNED)
+        self.assertEqual(parsed_down.action_point_id, "nova_ushytsia")
+
+    def test_daily_summary_ignored(self):
+        p_sum = RawPost("kpszsu", 87000, "⚡️ ЗБИТО/ПОДАВЛЕНО 536 ВОРОЖИХ БПЛА", T0)
+        parsed = self.normalizer.parse(p_sum)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

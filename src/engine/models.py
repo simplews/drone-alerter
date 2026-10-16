@@ -56,6 +56,8 @@ class ParsedMessage:
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
     divert_destination: str | None = None
+    divert_destinations: list[str] = field(default_factory=list)
+    point_groups: list[list[str]] = field(default_factory=list)
     drone_type: DroneType = DroneType.CONVENTIONAL
     target_type: str | None = None
     raw_text: str = ""
