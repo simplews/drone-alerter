@@ -321,6 +321,13 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(parsed.points, [])
         self.assertEqual(parsed.action, ActionType.NONE)
 
+    def test_pudlivtsi_corridor_point(self):
+        post = RawPost("kudy_letyt", 124001, "Хмельниччина:\nРеактивний БпЛА курсом на Пудлівці", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertTrue(parsed.is_jet)
+        self.assertEqual(parsed.points, ["pudlivtsi"])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
 
 if __name__ == "__main__":
     unittest.main()
