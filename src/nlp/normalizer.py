@@ -28,11 +28,25 @@ _GENERAL_DRONE_RE = re.compile(
 )
 
 # Patterns for actions
-_DOWNED_RE = re.compile(r"(?i)\b(збит[оаіи]|збили|уражен[оа]|мінус\s+ціль|знищен[оа])\b")
+_DOWNED_RE = re.compile(
+    r"(?i)\b(збит[оаіи]|збили|уражен[оа]|мінус\s+ціль|знищен[оа]|"
+    r"працювали\s+сили\s+оборони|відпрацювал[аи]\s+(?:ппо|сили))\b"
+)
 _EXPLOSION_RE = re.compile(r"(?i)\b(вибух|вибухи|гучно|чутно\s+вибух)\b")
-_LOST_RE = re.compile(r"(?i)\b(локаційно\s+втрачен[оа]|втрачено\s+з\s+радарів)\b")
-_DIVERTED_RE = re.compile(r"(?i)\b(на\s+рівне|на\s+рівненщину|на\s+волинь|на\s+житомир|на\s+житомирщину|на\s+північ|відвернув|відвернул[аои]|відвертає|змінил[аои]?\s+курс)\b")
+_LOST_RE = re.compile(
+    r"(?i)\b(локаційно\s+втрачен\w*|втрачено\s+з\s+радар\w*|втрата\s+фіксації|"
+    r"втрачено\s+фіксацію|переста\w*\s+фіксуватис\w*|не\s+фіксуєтьс\w*|зник\w*\s+з\s+радар\w*)\b"
+)
+_DIVERTED_RE = re.compile(
+    r"(?i)\b(на\s+рівне|на\s+рівненщину|курсом\s+на\s+рівненщин\w*|на\s+волинь|на\s+житомир|на\s+житомирщину|"
+    r"на\s+північ|відвернув|відвернул[аои]|відвертає|змінил[аои]?\s+курс)\b"
+)
 _CLEAR_RE = re.compile(r"(?i)\b(відбій|чисто|дорозвідка)\b")
+_PREVENTIVE_RE = re.compile(r"(?i)\b(превентив\w*)\b")
+_SUMMARY_OR_NEWS_RE = re.compile(
+    r"(?i)(?:збито\s*/\s*подавлено|протягом\s+(?:дня|ночі|доби)|усього\s+збито|"
+    r"загальні\s+бойові\s+втрати|су-34|су-35|су-24|ка-52|мі-8|крилат\w+\s+ракет\w+\s+«?нептун)"
+)
 _ANOTHER_TARGET_RE = re.compile(
     r"(?i)\b(ще\s+один|ще\s+одна|ще\s+1|ще\s+дв[іа]|інша\s+ціль|інший\s+шахед|інша\s+герань|нова\s+ціль|новий\s+шахед|другий\s+реактивн|друга\s+ціль)\b"
 )
@@ -42,12 +56,32 @@ _ANOTHER_TARGET_RE = re.compile(
 _DISTANT_REGION_RE = re.compile(
     r"(?i)\b(брянськ|брянщин|чернігів|сумщин|сумськ|харків|полтав|дніпропетров|запоріж|"
     r"херсон|миколаїв|одещин|одеськ|кіровоград|черкащин|черкаськ|донецьк|луганськ|крим|"
-    r"київщин|київськ|вишгород|бровар|дарниц|дврз|чорнобил|славутич|житомир|бердичів)\w*"
+    r"київ|києв|вишгород|бровар|дарниц|дврз|чорнобил|славутич|житомир|бердичів)\w*"
+)
+
+# Section headers for northern-track oblasts/cities where drones are already far north of the IF corridor
+_NORTHERN_SECTION_HEADER_RE = re.compile(
+    r"(?i)\b(рівненщин|рівне|волин|луцьк|ковел)\w*"
+)
+
+# Northern-track locations and phrases (Zhytomyr -> North Khmelnytskyi -> Rivne -> Volyn)
+_NORTHERN_TRACK_RE = re.compile(
+    r"(?i)(?:"
+    r"(?<!курсом\s)(?<!напрямком\s)\b(?:на|у|в)\s+(?:заході\s+|півдні\s+|півночі\s+|сході\s+|межі\s+)?(?:рівненщині|рівненщини|волині)\b|"
+    r"\b(?:з\s+)?півночі\s+хмельниччин\w*|"
+    r"\bна\s+північ\w*\s+хмельниччин\w*|"
+    r"\bмежі\s+хмельниччин\w*\s+(?:та|і|й)\s+рівненщин\w*|"
+    r"\bшепетівськ\w*\s+(?:район\w*|р-н\w*|рн)\b|"
+    r"\b(?:луцьк|ковел|сарн|березн|костопіл|степан|вараш|дубровиц|клеван|оржів|"
+    r"острог|здолбунів|мізоч|смиг|млинів|радивилів|колк|ківерц|маневич|рожищ|"
+    r"торчин|турійськ|голоб|ягодин|любомл|нововолинськ|ратн|шацьк|"
+    r"славут|білогір|ізяслав|теофіпол|полонн|гриців|баранівк|ємільчин|звягел|коростен|овруч)\w*"
+    r")"
 )
 
 # Approach / western regions relevant to the corridor
 _CORRIDOR_REGION_RE = re.compile(
-    r"(?i)\b(вінниччин|вінницьк|хмельниччин|хмельницьк|тернопіль|франків|прикарпат|буковин|чернівецьк|львів|рівнен|волин)\w*"
+    r"(?i)\b(вінниччин|вінницьк|хмельниччин|хмельницьк|тернопіль|франків|прикарпат|буковин|чернівецьк|львів)\w*"
 )
 
 
@@ -94,14 +128,23 @@ class MessageNormalizer:
                 if dest:
                     return cls._normalize_divert_dest(dest)
 
-        # 2. Check cardinal directions and general targets from regex
-        cardinal_match = re.search(
-            r"(?i)\b(?:курсом\s+на|напрямком\s+на|у\s+напрямку|в\s+напрямку|на|в\s+бік|у\s+бік)\s+"
+        # 2a. Explicit directional prefix (allows any grammatical inflection, e.g. "курсом на Рівненщині")
+        dir_prefix_match = re.search(
+            r"(?i)\b(?:курсом\s+на|напрямком\s+на|у\s+напрямку|в\s+напрямку|в\s+бік|у\s+бік)\s+"
             r"(північ\w*|південь\w*|схід\w*|захід\w*|рівненщин\w*|рівне\w*|волин\w*|житомир\w*|хмельницьк\w*|тернопіль\w*|львів\w*)\b",
             line_norm,
         )
-        if cardinal_match:
-            return cls._normalize_divert_dest(cardinal_match.group(1))
+        if dir_prefix_match:
+            return cls._normalize_divert_dest(dir_prefix_match.group(1))
+
+        # 2b. Bare "на <direction>" — require accusative direction forms so locative ("на Рівненщині", "на Тернопільщині") is not treated as a direction
+        bare_na_match = re.search(
+            r"(?i)\bна\s+"
+            r"(північ|південь|схід|захід|рівненщину|рівне|волинь|житомир|житомирщину|хмельницький|тернопіль|львів|львівщину)\b",
+            line_norm,
+        )
+        if bare_na_match:
+            return cls._normalize_divert_dest(bare_na_match.group(1))
 
         # 3. Check general pattern "відвернув(-ла/-ли) на <слово>" або "курсом на <слово>"
         general_match = re.search(
@@ -154,21 +197,32 @@ class MessageNormalizer:
         if _DIVERTED_RE.search(line_norm):
             return True
         return any(
-            kw.lower() in line_norm
+            bool(re.search(rf"(?i)\b{re.escape(kw.lower())}\b", line_norm))
             for kw in cancel_keywords
             if kw.lower().startswith(("на ", "повз ")) or "відверн" in kw.lower() or "курс" in kw.lower()
         )
+
+    @staticmethod
+    def _is_section_header(line_strip: str) -> bool:
+        """Return True if the line is a region/city header ending with ':' (allowing markdown bold/italic)."""
+        cleaned = re.sub(r"[\*_~`!\s]+$", "", line_strip)
+        return cleaned.endswith(":")
 
     def parse(self, post: RawPost) -> ParsedMessage:
         text = post.text
         norm_text = normalize(text)
         ref = self._get_ref()
 
-        # 1. Check for explicit jet drone keywords
-        explicit_jet = any(kw.lower() in norm_text for kw in ref.target_keywords)
-        explicit_conventional = bool(_CONVENTIONAL_KW_RE.search(norm_text))
+        # 0. Ignore statistical summaries and non-UAV news reports
+        if _SUMMARY_OR_NEWS_RE.search(norm_text):
+            return ParsedMessage(
+                is_jet=False,
+                points=[],
+                action=ActionType.NONE,
+                raw_text=text,
+            )
 
-        # 2. Check for context inheritance
+        # 1. Check for context inheritance
         now = post.posted_at_utc
         last_jet_time = self._channel_jet_context.get(post.channel)
         inherited_jet = bool(
@@ -176,7 +230,7 @@ class MessageNormalizer:
             or (self._last_any_jet_time and (now - self._last_any_jet_time) <= self._context_window)
         )
 
-        # 3. Line-aware analysis for multi-region digests and actions
+        # 2. Line-aware analysis for multi-region digests and actions
         alias_index = ref.alias_index()
         sorted_aliases = sorted(alias_index.keys(), key=len, reverse=True)
         alias_patterns = [
@@ -185,16 +239,21 @@ class MessageNormalizer:
         ]
 
         points_found: list[str] = []
+        point_groups: list[list[str]] = []
         divert_detected = False
         divert_point_id: str | None = None
         divert_destination: str | None = None
+        divert_destinations: list[str] = []
         downed_detected = False
+        downed_point_id: str | None = None
         lost_detected = False
+        lost_point_id: str | None = None
         explosion_detected = False
         clear_detected = False
         relevant_lines: list[str] = []
+        corridor_action_lines: list[str] = []
 
-        # Track whether the current paragraph block belongs to a distant region header (e.g. "Чернігівщина:")
+        # Track whether the current paragraph block belongs to a distant or northern region header (e.g. "**Кіровоградщина:**")
         in_distant_section = False
 
         for raw_line in text.splitlines():
@@ -204,19 +263,22 @@ class MessageNormalizer:
                 continue
 
             line_norm = normalize(line_strip)
+            is_header = self._is_section_header(line_strip)
 
             # Check if this line is a section header or mentions a region
             has_distant = bool(_DISTANT_REGION_RE.search(line_norm))
+            has_northern_header = bool(_NORTHERN_SECTION_HEADER_RE.search(line_norm))
             has_corridor_reg = bool(_CORRIDOR_REGION_RE.search(line_norm))
 
-            if line_strip.endswith(":") and has_distant and not has_corridor_reg:
-                in_distant_section = True
+            if is_header:
+                if (has_distant or has_northern_header) and not has_corridor_reg:
+                    in_distant_section = True
+                elif has_corridor_reg:
+                    in_distant_section = False
+                # Section headers only set region context and never represent active target sightings
                 continue
-            if line_strip.endswith(":") and has_corridor_reg:
-                in_distant_section = False
 
-            # If the current line mentions a distant region (e.g. "в Подільському районі Одещини", "на Одещині", "Чернігівщина:"),
-            # ignore it completely. Even if it says "на Вінниччину (Піщанка)", the drone has not entered the corridor yet.
+            # If the current line is inside a distant/northern section or mentions a distant region, ignore it
             if in_distant_section or has_distant:
                 continue
 
@@ -254,6 +316,45 @@ class MessageNormalizer:
                 if pid not in line_points:
                     line_points.append(pid)
 
+            # Sort multiple points on the same line from upstream to downstream (descending distance_km)
+            if len(line_points) > 1:
+                line_points.sort(
+                    key=lambda pid: (ref.points[pid].distance_km or 0.0) if pid in ref.points else 0.0,
+                    reverse=True,
+                )
+
+            # Ignore northern-track lines (Rivne/Volyn/Shepetivka/Bilohiria/etc.) that have no southern corridor points
+            has_northern_track = bool(_NORTHERN_TRACK_RE.search(line_norm))
+            if has_northern_track and not line_points:
+                continue
+
+            line_is_clear = bool(_CLEAR_RE.search(line_norm))
+            line_is_preventive = bool(_PREVENTIVE_RE.search(line_norm))
+            line_is_downed = bool(_DOWNED_RE.search(line_norm))
+            line_is_lost = bool(_LOST_RE.search(line_norm))
+            line_is_explosion = bool(_EXPLOSION_RE.search(line_norm))
+
+            # If a line is a downed/lost report, record the action and its point rather than an active movement sighting
+            if line_is_downed:
+                downed_detected = True
+                if line_points and downed_point_id is None:
+                    downed_point_id = line_points[0]
+                corridor_action_lines.append(line_strip)
+                continue
+
+            if line_is_lost:
+                lost_detected = True
+                if line_points and lost_point_id is None:
+                    lost_point_id = line_points[0]
+                corridor_action_lines.append(line_strip)
+                continue
+
+            # If a line is a reconnaissance ("дорозвідка") or preventive warning ("превентивно"),
+            # do not treat mentioned districts/cities as active flying targets
+            if line_is_clear or line_is_preventive:
+                clear_detected = True
+                continue
+
             # If line mentions distant areas without corridor points,
             # it should not trigger actions (divert/downed/lost) for corridor targets
             is_corridor_line = bool(line_points or has_corridor_reg)
@@ -266,47 +367,58 @@ class MessageNormalizer:
                 divert_detected = True
                 if divert_point_id is None:
                     divert_point_id = line_points[0]
-                if divert_destination is None:
-                    divert_destination = self._extract_divert_destination(line_norm, ref.cancel_keywords)
+                dest = self._extract_divert_destination(line_norm, ref.cancel_keywords)
+                if dest:
+                    if divert_destination is None:
+                        divert_destination = dest
+                    if dest not in divert_destinations:
+                        divert_destinations.append(dest)
+                corridor_action_lines.append(line_strip)
             elif line_points:
                 for pid in line_points:
                     if pid not in points_found:
                         points_found.append(pid)
+                point_groups.append(line_points)
                 relevant_lines.append(line_strip)
             elif line_has_divert and (is_corridor_line or not has_distant):
                 divert_detected = True
-                if divert_destination is None:
-                    divert_destination = self._extract_divert_destination(line_norm, ref.cancel_keywords)
+                dest = self._extract_divert_destination(line_norm, ref.cancel_keywords)
+                if dest:
+                    if divert_destination is None:
+                        divert_destination = dest
+                    if dest not in divert_destinations:
+                        divert_destinations.append(dest)
+                corridor_action_lines.append(line_strip)
 
-            if _DOWNED_RE.search(line_norm) and (is_corridor_line or not has_distant):
-                downed_detected = True
-            elif _LOST_RE.search(line_norm) and (is_corridor_line or not has_distant):
-                lost_detected = True
-            elif _EXPLOSION_RE.search(line_norm) and (is_corridor_line or not has_distant):
+            if line_is_explosion and (is_corridor_line or not has_distant):
                 explosion_detected = True
-            elif _CLEAR_RE.search(line_norm) and (is_corridor_line or not has_distant):
-                clear_detected = True
+                corridor_action_lines.append(line_strip)
 
-        # 4. Determine overall action
-        # Note: if an active corridor point is still reported on another line (e.g. a second drone at Dunaivtsi),
-        # keep points_found so the active drone continues to be tracked; only set DIVERTED when no active corridor
-        # points remain or when the action is DOWNED/LOST.
+        # 3. Determine overall action
+        # If an active corridor point is still reported on another line, keep tracking the active drone;
+        # only set DIVERTED/DOWNED/LOST when no active movement points remain (or when the post is purely an action).
         action = ActionType.NONE
-        if downed_detected:
+        if downed_detected and not points_found:
             action = ActionType.DOWNED
-        elif lost_detected:
+        elif lost_detected and not points_found:
             action = ActionType.LOST
-        elif explosion_detected:
+        elif explosion_detected and not points_found:
             action = ActionType.EXPLOSION
         elif divert_detected and not points_found:
             action = ActionType.DIVERTED
         elif clear_detected and not points_found:
             action = ActionType.CLEAR
 
-        # 5. Count the targets locally in relevant corridor lines
+        # 4. Count the targets locally in relevant corridor lines
         count = 1
         explicit_count = False
-        search_target_text = "\n".join(relevant_lines) if relevant_lines else text
+        if relevant_lines:
+            search_target_text = "\n".join(relevant_lines)
+        elif corridor_action_lines:
+            search_target_text = "\n".join(corridor_action_lines)
+        else:
+            search_target_text = text
+
         for pattern, extractor in _COUNT_PATTERNS:
             m = pattern.search(search_target_text)
             if m:
@@ -314,17 +426,23 @@ class MessageNormalizer:
                 explicit_count = True
                 break
 
-        # Determine drone type and context inheritance
-        has_general_drone = bool(_GENERAL_DRONE_RE.search(norm_text))
+        # 5. Determine drone type and context inheritance on corridor-relevant text
+        norm_target_text = normalize(search_target_text)
+        explicit_jet = any(kw.lower() in norm_target_text for kw in ref.target_keywords)
+        explicit_conventional = bool(_CONVENTIONAL_KW_RE.search(norm_target_text))
+        has_general_drone = bool(_GENERAL_DRONE_RE.search(norm_target_text))
+        has_corridor_activity = bool(points_found or action != ActionType.NONE)
+
         if explicit_jet:
             drone_type = DroneType.JET
             is_jet = True
-            self._channel_jet_context[post.channel] = now
-            self._last_any_jet_time = now
+            if has_corridor_activity:
+                self._channel_jet_context[post.channel] = now
+                self._last_any_jet_time = now
         elif explicit_conventional:
             drone_type = DroneType.CONVENTIONAL
             is_jet = False
-        elif inherited_jet and not has_general_drone and bool(points_found or action != ActionType.NONE):
+        elif inherited_jet and not has_general_drone and has_corridor_activity:
             # Short follow-up along the jet track (e.g. "Дунаївці — курс на захід", "Хриплин")
             drone_type = DroneType.JET
             is_jet = True
@@ -334,9 +452,17 @@ class MessageNormalizer:
             drone_type = DroneType.CONVENTIONAL
             is_jet = False
 
-        # Bind the action to the first found point or diverted point
-        action_point = points_found[0] if points_found else divert_point_id
-        is_new_target_marker = bool(_ANOTHER_TARGET_RE.search(norm_text))
+        # Bind the action to the specific action point or first found point
+        if action == ActionType.DOWNED and downed_point_id:
+            action_point = downed_point_id
+        elif action == ActionType.LOST and lost_point_id:
+            action_point = lost_point_id
+        elif points_found:
+            action_point = points_found[0]
+        else:
+            action_point = divert_point_id
+
+        is_new_target_marker = bool(_ANOTHER_TARGET_RE.search(norm_target_text))
         target_type = self._extract_target_type(search_target_text)
 
         return ParsedMessage(
@@ -348,9 +474,12 @@ class MessageNormalizer:
             action=action,
             action_point_id=action_point,
             divert_destination=divert_destination,
+            divert_destinations=divert_destinations,
+            point_groups=point_groups,
             drone_type=drone_type,
             target_type=target_type,
             raw_text=text,
         )
+
 
 

@@ -559,8 +559,101 @@ class TestTargetTracker(unittest.TestCase):
         broadcast_alerts = [a for a in alerts if not a.is_update]
         self.assertEqual(len(broadcast_alerts), 0)
 
+    def test_simultaneous_two_waves_and_otynia_no_downgrade(self):
+        """Replicate tonight's 00:03-00:30 UTC two-wave attack:
+        - Wave 1 advances Nova Ushytsia -> Borshchiv -> Chernelytsia (Level 3A).
+        - In the same 00:03:59 digest, Wave 2 enters at Stara Ushytsia -> Kamianets-Podilskyi (Level 2).
+        - At 00:05:16, Otyniia (regional, 28 km) is reported: must NOT downgrade Wave 1 to REGIONAL or emit a regional alert.
+        - At 00:07:55, Tlumach (25 km) must match Wave 1 (Chernelytsia), NOT Wave 2 (Kamianets-Podilskyi).
+        - Northern-track posts ("на заході Рівненщини, курс на Волинь", "з півночі Хмельниччини на Рівненщину")
+          must NOT divert either wave.
+        """
+        t_w1_start = datetime(2026, 10, 15, 23, 55, 35, tzinfo=UTC)
+        p_w1_bor = RawPost("kudy_letyt", 123902, "**Тернопільщина:**\nРеактивний БпЛА курсом на Борщів", t_w1_bor := t_w1_start)
+        self.tracker.process_message(p_w1_bor, self.normalizer.parse(p_w1_bor), now=t_w1_bor)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Digest at 00:03:59 has both Wave 2 (Stara Ushytsia -> Kamianets) and Wave 1 (Chernelytsia)
+        t_digest = datetime(2026, 10, 16, 0, 3, 59, tzinfo=UTC)
+        digest_text = (
+            "**Тернопільщина:**\n"
+            "Реактивний БпЛА курсом на Шумськ\n\n"
+            "**Хмельниччина:**\n"
+            "Реактивний БпЛА залітає в область повз Стару Ушицю в бік Камʼянець-Подільського\n\n"
+            "**Франківщина:**\n"
+            "Реактивний БпЛА курсом на Івано-Франківськ повз Чернелицю"
+        )
+        p_digest = RawPost("kudy_letyt", 123904, digest_text, t_digest)
+        alerts_d = [a for a in self.tracker.process_message(p_digest, self.normalizer.parse(p_digest), now=t_digest) if not a.is_update]
+        self.assertEqual(len(alerts_d), 2)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        # At 00:05:16, Otyniia is reported -> matches Wave 1 (Level 3A) without downgrading to REGIONAL
+        t_oty = datetime(2026, 10, 16, 0, 5, 16, tzinfo=UTC)
+        p_oty = RawPost("kudy_letyt", 123905, "**Франківщина:**\nРеактивний БпЛА курсом на Отинію", t_oty)
+        alerts_oty = [a for a in self.tracker.process_message(p_oty, self.normalizer.parse(p_oty), now=t_oty) if not a.is_update]
+        self.assertEqual(len(alerts_oty), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        # At 00:07:55, Tlumach matches Wave 1 (not Wave 2 at Kamianets)
+        t_tlu = datetime(2026, 10, 16, 0, 7, 55, tzinfo=UTC)
+        p_tlu = RawPost("kudy_letyt", 123907, "Реактивний БпЛА повз Тлумач рухається в бік Івано-Франківська", t_tlu)
+        alerts_tlu = [a for a in self.tracker.process_message(p_tlu, self.normalizer.parse(p_tlu), now=t_tlu) if not a.is_update]
+        self.assertEqual(len(alerts_tlu), 1)
+        self.assertEqual(alerts_tlu[0].level, AlertLevel.LEVEL_3A)
+        self.assertIn("Тлумач", alerts_tlu[0].title)
+
+        # Northern-track post at 00:12:54 must NOT divert either wave
+        t_north = datetime(2026, 10, 16, 0, 12, 54, tzinfo=UTC)
+        p_north = RawPost("kpszsu", 87166, "🏍 Реактивний БпЛА на заході Рівненщини, курс на Волинь.", t_north)
+        alerts_n = self.tracker.process_message(p_north, self.normalizer.parse(p_north), now=t_north)
+        self.assertEqual(len(alerts_n), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+    def test_stage_aware_divert_selects_matching_oblast_destination(self):
+        """When a target is already at Skala-Podilska (110 km, Ternopil oblast),
+        a digest containing both 'на Вовковинці' (Khmelnytskyi) and 'на Копичинці' (Ternopil)
+        must divert the target to Kopychyntsi, while an upstream Shargorod/Derazhnia post must NOT divert it.
+        """
+        t1 = datetime(2026, 10, 15, 20, 35, 32, tzinfo=UTC)
+        p1 = RawPost("monitoring_zaxid", 28197, "Реактивний БпЛА рухається далі на Скалу-Подільську, Тернопільщина", t1)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Upstream Khmelnytskyi diversion to Derazhnia must NOT divert a target already in Ternopil oblast
+        t_der = t1 + timedelta(minutes=1)
+        p_der = RawPost("monitoring_zaxid", 28198, "Хмельниччина:\n1 реактивна герань на Деражню", t_der)
+        alerts_der = self.tracker.process_message(p_der, self.normalizer.parse(p_der), now=t_der)
+        self.assertEqual(len(alerts_der), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Multi-region digest with Vovkovyntsi + Kopychyntsi diverts Skala-Podilska to Kopychyntsi
+        t_kop = t1 + timedelta(minutes=2)
+        digest = (
+            "**Хмельниччина:**\n"
+            "Реактивний БпЛА курсом на Вовковинці\n\n"
+            "**Тернопільщина:**\n"
+            "Реактивний БпЛА курсом на Копичинці"
+        )
+        p_kop = RawPost("kudy_letyt", 123780, digest, t_kop)
+        alerts_kop = self.tracker.process_message(p_kop, self.normalizer.parse(p_kop), now=t_kop)
+        self.assertEqual(len(alerts_kop), 1)
+        self.assertIn("Копичинці", alerts_kop[0].body)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_single_line_multi_point_coalesces_to_single_alert(self):
+        # "1 реактивна герань поблизу Мурованих-Курилівців в бік Дунаївців" -> 1 coalesced alert at Dunaivtsi
+        p = RawPost("monitoring_zaxid", 28144, "1 реактивна герань поблизу Мурованих-Курилівців в бік Дунаївців", T0)
+        alerts = [a for a in self.tracker.process_message(p, self.normalizer.parse(p), now=T0) if not a.is_update]
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Дунаївці", alerts[0].title)
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].points_sequence, ["murovani_kyrylivtsi", "dunaivtsi"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
