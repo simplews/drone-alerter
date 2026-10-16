@@ -74,7 +74,7 @@ _NORTHERN_TRACK_RE = re.compile(
     r"\bшепетівськ\w*\s+(?:район\w*|р-н\w*|рн)\b|"
     r"\b(?:луцьк|ковел|сарн|березн|костопіл|степан|вараш|дубровиц|клеван|оржів|"
     r"острог|здолбунів|мізоч|смиг|млинів|радивилів|колк|ківерц|маневич|рожищ|"
-    r"торчин|турійськ|голоб|ягодин|любомл|нововолинськ|ратн|шацьк|"
+    r"торчин|турійськ|голоб|ягодин|любомл|головне|головного|головному|нововолинськ|ратн|шацьк|"
     r"славут|білогір|ізяслав|теофіпол|полонн|гриців|баранівк|ємільчин|звягел|коростен|овруч)\w*"
     r")"
 )
@@ -94,6 +94,8 @@ class MessageNormalizer:
         # Last time of a jet target mention for each channel: channel -> datetime
         self._channel_jet_context: dict[str, datetime] = {}
         self._last_any_jet_time: datetime | None = None
+        # Posts that had no corridor points (e.g. distant/northern regions) so replies to them are ignored
+        self._non_corridor_posts: set[tuple[str, int]] = set()
 
     def _get_ref(self) -> ReferenceData:
         return self._ref_cache.get()
@@ -397,17 +399,29 @@ class MessageNormalizer:
         # 3. Determine overall action
         # If an active corridor point is still reported on another line, keep tracking the active drone;
         # only set DIVERTED/DOWNED/LOST when no active movement points remain (or when the post is purely an action).
+        has_any_corridor_point = bool(
+            points_found or downed_point_id or lost_point_id or divert_point_id
+        )
+        is_reply_to_non_corridor = bool(
+            post.reply_to_message_id is not None
+            and (post.channel, post.reply_to_message_id) in self._non_corridor_posts
+        )
+
         action = ActionType.NONE
-        if downed_detected and not points_found:
-            action = ActionType.DOWNED
-        elif lost_detected and not points_found:
-            action = ActionType.LOST
-        elif explosion_detected and not points_found:
-            action = ActionType.EXPLOSION
-        elif divert_detected and not points_found:
-            action = ActionType.DIVERTED
-        elif clear_detected and not points_found:
-            action = ActionType.CLEAR
+        if not is_reply_to_non_corridor:
+            if downed_detected and not points_found:
+                action = ActionType.DOWNED
+            elif lost_detected and not points_found:
+                action = ActionType.LOST
+            elif explosion_detected and not points_found:
+                action = ActionType.EXPLOSION
+            elif divert_detected and not points_found:
+                action = ActionType.DIVERTED
+            elif clear_detected and not points_found:
+                action = ActionType.CLEAR
+
+        if not has_any_corridor_point and (action == ActionType.NONE or is_reply_to_non_corridor):
+            self._non_corridor_posts.add((post.channel, post.message_id))
 
         # 4. Count the targets locally in relevant corridor lines
         count = 1

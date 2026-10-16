@@ -138,7 +138,7 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         timeout_time2 = target2.eta_window_end_utc + timedelta(minutes=5)
         alerts2 = tracker2.check_timeouts(now=timeout_time2)
         self.assertEqual(len(alerts2), 1)
-        self.assertIn("не означає, що загрози немає", alerts2[0].body)
+        self.assertIn("однак загроза може повторитися", alerts2[0].body)
 
     def test_regional_alert_does_not_claim_100_percent(self):
         """Verify regional alert does not contain false certainty '100%'."""
@@ -151,6 +151,33 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("100%", alert.title)
         self.assertIn("Найімовірніше, в області буде оголошено тривогу", alert.body)
         self.assertIn("Франківськ", alert.body)
+
+    def test_eta_body_no_duplicate_minutes_and_level_phrasing(self):
+        """Verify ETA body does not repeat duration in parentheses and reflects uncertainty on distant levels."""
+        # Level 1 (distant)
+        t1 = TargetTracker(self.cache)
+        p1 = RawPost("chan_a", 1, "Шахед на Нову Ушицю", T0)
+        a1 = t1.process_message(p1, self.normalizer.parse(p1), now=T0)[0]
+        self.assertIn("У разі руху в напрямку міста — орієнтовно:", a1.body)
+        self.assertNotIn("Очікується біля міста", a1.body)
+        self.assertNotIn("(≈", a1.body)
+        self.assertEqual(a1.body.count("хв)"), 1)
+
+        # Level 2 (approach)
+        t2 = TargetTracker(self.cache)
+        p2 = RawPost("chan_a", 2, "Реактивна герань на Борщів", T0)
+        a2 = t2.process_message(p2, self.normalizer.parse(p2), now=T0)[0]
+        self.assertIn("Орієнтовний час підльоту (якщо курс збережеться):", a2.body)
+        self.assertNotIn("(≈", a2.body)
+        self.assertEqual(a2.body.count("хв)"), 1)
+
+        # Level 3A (close approach)
+        t3 = TargetTracker(self.cache)
+        p3 = RawPost("chan_a", 3, "Реактивна герань на Тлумач", T0)
+        a3 = t3.process_message(p3, self.normalizer.parse(p3), now=T0)[0]
+        self.assertIn("Орієнтовний час підльоту до міста:", a3.body)
+        self.assertNotIn("(≈", a3.body)
+        self.assertEqual(a3.body.count("хв)"), 1)
 
     async def test_cmd_start_mentions_general_rule_and_shahed(self):
         """Verify /start text includes key safety disclaimers, Shahed reference, /stop and no 'акаунт'."""

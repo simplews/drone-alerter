@@ -85,6 +85,7 @@ class TelegramChannelListener:
             channel_name = getattr(chat, "username", None) or str(chat.id)
             text = event.raw_text or ""
             posted_at = event.message.date.astimezone(UTC)
+            reply_to_msg_id = getattr(event.message, "reply_to_msg_id", None)
             self._last_event_utc = datetime.now(UTC)
 
             post = RawPost(
@@ -93,6 +94,7 @@ class TelegramChannelListener:
                 text=text,
                 posted_at_utc=posted_at,
                 is_edit=is_edit,
+                reply_to_message_id=reply_to_msg_id,
             )
             await self.on_post(post)
         except Exception:

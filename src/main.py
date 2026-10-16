@@ -62,7 +62,11 @@ class Application:
         self.tracker = TargetTracker(
             self.ref_cache,
             store=self.learning_store,
-            is_siren_active_fn=lambda: bool(self.siren_service and self.siren_service.get_current_state().is_active),
+            is_siren_active_fn=lambda: bool(
+                self.siren_service
+                and (st := self.siren_service.get_current_state())
+                and st.is_active
+            ),
         )
 
         # 3. Official air-raid alert service

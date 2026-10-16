@@ -277,7 +277,11 @@ def create_bot_dispatcher(
                 AlertLevel.LEVEL_2: "🟠 Наближення",
                 AlertLevel.LEVEL_3A: "🔴 Небезпека (підліт)",
                 AlertLevel.LEVEL_3B: "🔴 Небезпека біля / над містом",
-                AlertLevel.REGIONAL: "ℹ️ Загроза в області (ймовірна тривога)",
+                AlertLevel.REGIONAL: (
+                    "ℹ️ Загроза в області"
+                    if (siren and siren.is_active)
+                    else "ℹ️ Загроза в області (ймовірна тривога)"
+                ),
             }
             for idx, t in enumerate(active, 1):
                 eta_str = f"{t.eta_min_minutes:.0f}–{t.eta_max_minutes:.0f} хв"
@@ -301,8 +305,12 @@ def create_bot_dispatcher(
                 drone_label = "Шахед" if getattr(t, "drone_type", None) == DroneType.CONVENTIONAL else "реактивний"
                 if t.level == AlertLevel.REGIONAL:
                     threat_line = "  Очікування: **загроза району області (курс не на Франківськ)**\n"
+                elif t.level == AlertLevel.LEVEL_1:
+                    threat_line = f"  У разі руху в напрямку міста — орієнтовно: **{eta_str}**\n"
+                elif t.level == AlertLevel.LEVEL_2:
+                    threat_line = f"  Орієнтовний час підльоту (якщо курс збережеться): **{eta_str}**\n"
                 else:
-                    threat_line = f"  Очікування біля міста: **{eta_str}**\n"
+                    threat_line = f"  Орієнтовний час підльоту до міста: **{eta_str}**\n"
                 lines.append(
                     f"• **Ціль #{idx}** ({t.target_count}х • {drone_label})\n"
                     f"  Останній пункт: **{point_name}** (о {last_seen_k})\n"

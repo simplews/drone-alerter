@@ -44,6 +44,7 @@ class RawPost:
     text: str
     posted_at_utc: datetime
     is_edit: bool = False
+    reply_to_message_id: int | None = None
 
 
 @dataclass
