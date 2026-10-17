@@ -32,6 +32,7 @@ class CityProfile:
     cancel_keywords: list[str]
     points: list[dict]
     conventional_speed_kmh: list[float] = field(default_factory=lambda: [150.0, 185.0])
+    missile_speed_kmh: list[float] = field(default_factory=lambda: [750.0, 880.0])
 
 
 def parse_profile(data: dict) -> CityProfile:
@@ -70,6 +71,7 @@ def parse_profile(data: dict) -> CityProfile:
         cancel_keywords=list(data.get("cancel_keywords", [])),
         points=list(data["points"]),
         conventional_speed_kmh=[float(x) for x in data.get("conventional_speed_kmh", [150.0, 185.0])],
+        missile_speed_kmh=[float(x) for x in data.get("missile_speed_kmh", [750.0, 880.0])],
     )
 
 
