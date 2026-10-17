@@ -130,6 +130,7 @@ class TargetTracker:
         point_id: str,
         posted_at: datetime,
         drone_type: DroneType | None = None,
+        target_type: str | None = None,
         is_new_target_marker: bool = False,
         exclude_target_ids: set[str] | None = None,
     ) -> Target | None:
@@ -156,6 +157,15 @@ class TargetTracker:
             if drone_type is not None and target.drone_type != drone_type:
                 continue
 
+            # Prevent merging distinct explicit cruise missile types (e.g. КР Х-101 vs КР Калібр)
+            if (
+                drone_type == DroneType.MISSILE
+                and target_type in ("КР Х-101", "КР Калібр")
+                and target.target_type in ("КР Х-101", "КР Калібр")
+                and target_type != target.target_type
+            ):
+                continue
+
             time_diff = abs(posted_at - target.last_seen_utc)
             if time_diff > self._max_gap:
                 continue
@@ -173,11 +183,12 @@ class TargetTracker:
                     continue
 
             # Prevent cross-corridor merging between regional points and distant main corridor points
+            max_cross_corridor_km = 95.0 if drone_type == DroneType.MISSILE else 45.0
             if (
                 getattr(last_point, "is_regional", False) != getattr(new_point, "is_regional", False)
                 and last_point.distance_km
                 and new_point.distance_km
-                and abs(last_point.distance_km - new_point.distance_km) > 45.0
+                and abs(last_point.distance_km - new_point.distance_km) > max_cross_corridor_km
             ):
                 continue
 
@@ -199,7 +210,11 @@ class TargetTracker:
             is_forward = False
             if last_point.distance_km and new_point.distance_km:
                 forward_jump_km = last_point.distance_km - new_point.distance_km
-                max_forward_km = 50.0 + time_diff_min * 10.0
+                max_forward_km = (
+                    (75.0 + time_diff_min * 16.0)
+                    if drone_type == DroneType.MISSILE
+                    else (50.0 + time_diff_min * 10.0)
+                )
                 is_forward = (-10.0 <= forward_jump_km <= max_forward_km)
             else:
                 is_forward = (new_point.level >= last_point.level)
@@ -239,7 +254,7 @@ class TargetTracker:
         alerts: list[AlertEvent] = []
 
         # 1. Write to LearningStore for analytics and retraining
-        if self._store and (parsed.is_jet or parsed.points):
+        if self._store and (parsed.is_jet or parsed.drone_type == DroneType.MISSILE or parsed.points):
             self._store.add_post(
                 channel=post.channel,
                 message_id=post.message_id,
@@ -287,6 +302,7 @@ class TargetTracker:
                         point_id,
                         post.posted_at_utc,
                         drone_type=parsed.drone_type,
+                        target_type=parsed.target_type,
                         is_new_target_marker=parsed.is_new_target_marker,
                         exclude_target_ids=targets_matched_in_post,
                     )
@@ -352,7 +368,9 @@ class TargetTracker:
 
                     # Escalate the level (never downgrade a LEVEL_2/3A/3B target to REGIONAL)
                     new_level = determine_level(point_id, point.level, is_regional=getattr(point, "is_regional", False))
-                    if self._level_rank(new_level) > self._level_rank(target.level):
+                    if self._level_rank(new_level) > self._level_rank(target.level) or (
+                        target.level == AlertLevel.LEVEL_1 and new_level == AlertLevel.REGIONAL
+                    ):
                         target.level = new_level
 
                 line_target = target
@@ -391,7 +409,7 @@ class TargetTracker:
                     target.confidence = "low"
 
                 # 4. Build the alert
-                # Only trigger a new alert if the target advanced to a new point, escalated level, or is brand new.
+                # Only trigger a new alert if the target advanced to a new point, escalated level, is a new regional vector, or is brand new.
                 # Lagged/repeated upstream posts are treated as non-alert updates (is_update=True).
                 alerted_points = self._target_alerted_points.setdefault(target.id, set())
                 is_new_point_for_target = point_id not in alerted_points
@@ -411,7 +429,12 @@ class TargetTracker:
                 # If the post is too stale (e.g. from a Telethon backlog replay after reconnect/restart,
                 # or an edit to an old message), do not broadcast a new alert to subscribers.
                 post_age_min = max(0.0, (now - post.posted_at_utc).total_seconds() / 60.0)
-                max_age_min = 7.0 if target.drone_type == DroneType.JET else 15.0
+                if target.drone_type == DroneType.MISSILE:
+                    max_age_min = 5.0
+                elif target.drone_type == DroneType.JET:
+                    max_age_min = 7.0
+                else:
+                    max_age_min = 15.0
                 is_stale_post = post_age_min > max_age_min or (post.is_edit and post_age_min > 5.0)
 
                 if is_stale_post and should_alert:
@@ -612,6 +635,8 @@ class TargetTracker:
 
         if target.drone_type == DroneType.CONVENTIONAL:
             type_suffix = " (Шахед)"
+        elif target.drone_type == DroneType.MISSILE:
+            type_suffix = f" ({target.target_type or 'крилата ракета'})"
         elif target.target_type:
             type_suffix = f" ({target.target_type})"
         else:
@@ -620,10 +645,20 @@ class TargetTracker:
         if target.level == AlertLevel.REGIONAL or getattr(point, "is_regional", False):
             name_gen = getattr(point, "name_gen", "") or point_display
             dist = point.distance_km or 0.0
+            if target.drone_type == DroneType.MISSILE:
+                missile_detail = (
+                    f" ({target.target_type})"
+                    if target.target_type and target.target_type != "крилата ракета"
+                    else ""
+                )
+                target_phrase = f"🚀 Зафіксовано рух крилатої ракети{missile_detail}"
+            else:
+                target_phrase = f"⚠️ Зафіксовано рух БпЛА{type_suffix}"
+
             if self._is_siren_active_fn():
                 title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Загроза в області"
                 body = (
-                    f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
+                    f"{target_phrase} у районі / напрямку н.п. **{point_display}** "
                     f"(~{dist:.0f} км від Івано-Франківська).\n\n"
                     f"🚨 **В області триває повітряна тривога.**\n"
                     f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
@@ -632,13 +667,13 @@ class TargetTracker:
             else:
                 title = f"ℹ️ {count_prefix}Рух у напрямку {name_gen} (~{dist:.0f} км від Франківська). Ймовірна тривога в області"
                 body = (
-                    f"⚠️ Зафіксовано рух БпЛА{type_suffix} у районі / напрямку н.п. **{point_display}** "
+                    f"{target_phrase} у районі / напрямку н.п. **{point_display}** "
                     f"(~{dist:.0f} км від Івано-Франківська).\n\n"
                     f"🚨 **Найімовірніше, в області буде оголошено тривогу.**\n"
                     f"Прямого курсу на Івано-Франківськ наразі немає, але загроза для області реальна. "
                     f"Слідкуйте за офіційними повідомленнями та будьте готові перейти в укриття."
                 )
-            is_silent = (dist > 30.0)
+            is_silent = False if target.drone_type == DroneType.MISSILE else (dist > 30.0)
 
         elif target.level in (AlertLevel.LEVEL_1, AlertLevel.LEVEL_2, AlertLevel.LEVEL_3A):
             if target.level == AlertLevel.LEVEL_1:

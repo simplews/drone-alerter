@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aiogram.types import Chat, Message
 
-from src.engine.models import AlertLevel, Target
+from src.engine.models import AlertLevel, DroneType, Target
 from src.telegram.bot import (
     SubscriberRepository,
     create_bot_dispatcher,
@@ -100,17 +100,29 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
             eta_min_minutes=26.0,
             eta_max_minutes=33.0,
         )
-        self.tracker.get_active_targets.return_value = [mock_target]
+        mock_missile = Target(
+            id="test-missile",
+            level=AlertLevel.LEVEL_2,
+            last_point_id="kamianets_podilskyi",
+            drone_type=DroneType.MISSILE,
+            target_type="КР Х-101",
+            last_seen_utc=now,
+            target_count=2,
+            eta_min_minutes=8.0,
+            eta_max_minutes=11.0,
+        )
+        self.tracker.get_active_targets.return_value = [mock_target, mock_missile]
 
         msg = MagicMock(spec=Message, text="/status", chat=MagicMock(spec=Chat, id=103))
         msg.answer = AsyncMock()
 
         await handler(msg)
         text = msg.answer.call_args[0][0]
-        self.assertIn("Зафіксовано активних цілей на коридорі: 1", text)
+        self.assertIn("Зафіксовано активних цілей на коридорі: 2", text)
         self.assertIn("Нова Ушиця", text)
         self.assertIn("🟡 Потенційна загроза", text)
         self.assertIn("26–33 хв", text)
+        self.assertIn("2х • КР Х-101", text)
 
     async def test_cmd_status_regional_target(self):
         handler = self._get_handler("cmd_status")

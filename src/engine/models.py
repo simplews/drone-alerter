@@ -35,6 +35,7 @@ class TargetStatus(str, Enum):
 class DroneType(str, Enum):
     JET = "jet"
     CONVENTIONAL = "conventional"
+    MISSILE = "missile"
 
 
 @dataclass

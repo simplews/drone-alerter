@@ -85,15 +85,18 @@ def create_bot_dispatcher(
             }
             regional_items = []
             for p in sorted(ref.points.values(), key=lambda pt: pt.distance_km or 0.0, reverse=True):
+                if getattr(p, "is_contextual", False):
+                    continue
                 if getattr(p, "is_regional", False):
                     p_name = format_place_title(p.names[0]) if p.names else p.id
                     dist_str = f"~{p.distance_km:.0f} км" if p.distance_km else "—"
                     sound_note = "гучне сповіщення" if (p.distance_km or 0.0) <= 30.0 else "тихе сповіщення"
                     regional_items.append(f"• **{p_name}:** {dist_str} від ІФ ({sound_note}) | загроза району області")
                 elif p.level in groups:
+                    from src.engine.eta import LEVEL_3B_POINT_IDS
                     p_name = format_place_title(p.names[0]) if p.names else p.id
                     eta_str = f"**{p.eta_min:.0f}–{p.eta_max:.0f} хв**" if p.eta_min is not None and p.eta_max is not None else "—"
-                    extra = " | рубежі передмістя" if p.id in ("khryplyn", "tysmenytsia") else ""
+                    extra = " | рубежі передмістя" if p.id in LEVEL_3B_POINT_IDS else ""
                     groups[p.level][1].append(f"• **{p_name}:** ~{p.distance_km:.0f} км{extra} | орієнтовно {eta_str}")
             res_blocks = [
                 title + "\n" + "\n".join(items)
@@ -118,8 +121,9 @@ def create_bot_dispatcher(
         levels = get_levels_text()
         return (
             "⏱ **ТАБЛИЦЯ РУБЕЖІВ ТА ОРІЄНТОВНИЙ ЧАС ПІДЛЬОТУ (ETA)**\n\n"
-            f"Розраховано для руху БпЛА в напрямку {texts['city_gen']} "
+            f"Розраховано для руху цілей в напрямку {texts['city_gen']} "
             f"вздовж коридору {texts['route_short']}.\n\n"
+            "• ☄️ **Крилаті ракети Х-101 / «Калібр» (750–880 км/год):** час підльоту приблизно вдвічі швидший за реактивні БпЛА і розраховується автоматично.\n"
             "• 🚀 **Реактивні БпЛА (400–480 км/год):** орієнтовні інтервали наведено в таблиці рубежів нижче.\n"
             "• 🛩 **Звичайні Шахеди (150–185 км/год):** час підльоту довший приблизно у 2.5 рази і розраховується автоматично при виявленні цілі.\n\n"
             f"{levels}\n\n"
@@ -135,7 +139,7 @@ def create_bot_dispatcher(
         return (
             "ℹ️ **ЯК ПРАЦЮЄ СИСТЕМА ТА ЯК МИ РАХУЄМО ЧАС (ETA)**\n\n"
             f"Бот створений для завчасного інформування мешканців {texts['city_gen']} та прилеглих районів "
-            "про потенційну загрозу реактивних і звичайних ударних БпЛА, що рухаються транзитним коридором "
+            "про потенційну загрозу крилатих ракет, реактивних і звичайних ударних БпЛА, що рухаються транзитним коридором "
             f"({texts['route_regions']}).\n\n"
             "📡 **1. Джерела моніторингу (канали, які відстежуються):**\n"
             "Система в реальному часі аналізує повідомлення з офіційних та перевірених каналів:\n"
@@ -151,8 +155,8 @@ def create_bot_dispatcher(
             "• Кількість цілей визначається строго в межах контексту знайденого пункту, "
             "щоб виключити помилки зі зведених постів для інших областей.\n\n"
             "⏱ **3. Як розраховується орієнтовне вікно підльоту (ETA):**\n"
-            "• **Тип загрози:** Система розпізнає швидкісні реактивні дрони (Шахед-238, швидкість 400–480 км/год) та звичайні ударні БпЛА (Шахед-136, швидкість 150–185 км/год).\n"
-            "• **Маневри:** Політ рідко є прямолінійним. Дрони змінюють висоту і курс для огинання зон ППО, "
+            "• **Тип загрози:** Система розпізнає крилаті ракети (Х-101, «Калібр», швидкість 750–880 км/год), швидкісні реактивні дрони (Шахед-238, швидкість 400–480 км/год) та звичайні ударні БпЛА (Шахед-136, швидкість 150–185 км/год).\n"
+            "• **Маневри:** Політ рідко є прямолінійним. Цілі змінюють висоту і курс для огинання зон ППО, "
             "тому до дистанції закладається коефіцієнт маневрування.\n"
             "• **Розрахункове вікно:** Вказується діапазон від найшвидшого прямого дольоту до руху з маневрами "
             "(наприклад, `22:50–22:58`, що відповідає `26–33 хв`).\n"
@@ -199,10 +203,10 @@ def create_bot_dispatcher(
 
         texts = get_profile().texts
         text = (
-            f"👋 **Вітаємо!** Це волонтерський бот раннього оповіщення про загрозу ударних БпЛА для {texts['city_gen']}.\n\n"
+            f"👋 **Вітаємо!** Це волонтерський бот раннього оповіщення про загрозу ударних БпЛА та крилатих ракет для {texts['city_gen']}.\n\n"
             "**Що він робить**\n"
             f"1. 🚨 Передає офіційні повітряні тривоги та відбої по {texts['region_loc']}.\n"
-            f"2. ⚡️ Стежить за моніторинговими каналами й попереджає, коли реактивний дрон чи Шахед рухається коридором {texts['route_short']}, з орієнтовним вікном підльоту (ETA).\n\n"
+            f"2. ⚡️ Стежить за моніторинговими каналами й попереджає, коли крилата ракета (Х-101, «Калібр»), реактивний дрон чи Шахед рухається коридором {texts['route_short']}, з орієнтовним вікном підльоту (ETA).\n\n"
             "**Головне правило**\n"
             "Бот — додатковий сигнал, а не офіційне джерело. Якщо оголошено тривогу — негайно в укриття, незалежно від того, чи писав бот. Відсутність сповіщення не означає, що небезпеки немає.\n\n"
             "**Як це виглядає**\n"
@@ -265,7 +269,7 @@ def create_bot_dispatcher(
         lines.append(siren_line)
         lines.append("")
 
-        # 2. Early detection of jet drones
+        # 2. Early detection of jet drones and cruise missiles
         active = tracker.get_active_targets() if tracker else []
         ref = tracker._get_ref() if tracker else None
         if not active:
@@ -302,7 +306,13 @@ def create_bot_dispatcher(
                             break
 
                 lvl_display = level_labels.get(t.level, t.level.value)
-                drone_label = "Шахед" if getattr(t, "drone_type", None) == DroneType.CONVENTIONAL else "реактивний"
+                dtype = getattr(t, "drone_type", None)
+                if dtype == DroneType.CONVENTIONAL:
+                    drone_label = "Шахед"
+                elif dtype == DroneType.MISSILE:
+                    drone_label = getattr(t, "target_type", None) or "крилата ракета"
+                else:
+                    drone_label = "реактивний"
                 if t.level == AlertLevel.REGIONAL:
                     threat_line = "  Очікування: **загроза району області (курс не на Франківськ)**\n"
                 elif t.level == AlertLevel.LEVEL_1:

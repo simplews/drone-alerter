@@ -724,9 +724,135 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alerts_valid[0].title, "Ціль змінила курс")
         self.assertEqual(len(self.tracker.get_active_targets()), 0)
 
+    def test_cruise_missile_tracking_eta_and_regional_alerts(self):
+        """Cruise missiles (Х-101 / Калібр) are tracked separately from drones,
+        use 750–880 km/h speed for ETA, and format regional alerts appropriately.
+        """
+        t0 = datetime(2026, 10, 16, 4, 30, 0, tzinfo=UTC)
+
+        # 1. Active Shahed at Nova Ushytsia
+        p_shahed = RawPost("kudy_letyt", 5001, "БпЛА курсом на Нову Ушицю", t0)
+        self.tracker.process_message(p_shahed, self.normalizer.parse(p_shahed), now=t0)
+
+        # 2. Cruise missile Х-101 enters at Nova Ushytsia (must NOT merge with Shahed)
+        t1 = t0 + timedelta(minutes=1)
+        p_kh101 = RawPost("kpszsu", 5002, "🚀 Група КР Х-101 через Нову Ушицю", t1)
+        alerts_kh = self.tracker.process_message(p_kh101, self.normalizer.parse(p_kh101), now=t1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+        self.assertEqual(len(alerts_kh), 1)
+        self.assertIn("(КР Х-101)", alerts_kh[0].title)
+
+        # Verify missile ETA from Nova Ushytsia (~190 km at 750-880 km/h -> ~14-21 min, much faster than jet/shahed)
+        missile_targets = [t for t in self.tracker.get_active_targets() if t.drone_type == DroneType.MISSILE]
+        self.assertEqual(len(missile_targets), 1)
+        self.assertLessEqual(missile_targets[0].eta_min_minutes, 16.0)
+        self.assertLessEqual(missile_targets[0].eta_max_minutes, 22.0)
+
+        # 3. Fast jump (~95 km in 5 min) to Borshchiv -> Chernelytsia links to the same missile target
+        t2 = t1 + timedelta(minutes=5)
+        p_cher = RawPost("monitoring_zaxid", 5003, "КР Х-101 повз Борщів у напрямку Чернелиці", t2)
+        alerts_cher = self.tracker.process_message(p_cher, self.normalizer.parse(p_cher), now=t2)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+        self.assertEqual(len(alerts_cher), 1)
+        self.assertEqual(alerts_cher[0].level, AlertLevel.LEVEL_3A)
+        self.assertIn("(КР Х-101)", alerts_cher[0].title)
+
+        # 4. Regional cruise missile alert (e.g. Kalibr on Burshtyn) is non-silent and uses missile phrasing
+        t3 = t2 + timedelta(minutes=1)
+        p_kalibr = RawPost("monitoring_zaxid", 5004, "2х Калібри курсом на Бурштин!", t3)
+        alerts_bur = self.tracker.process_message(p_kalibr, self.normalizer.parse(p_kalibr), now=t3)
+        self.assertEqual(len(alerts_bur), 1)
+        self.assertEqual(alerts_bur[0].level, AlertLevel.REGIONAL)
+        self.assertFalse(alerts_bur[0].is_silent)
+        self.assertIn("🚀 Зафіксовано рух крилатої ракети (КР Калібр)", alerts_bur[0].body)
+
+    def test_missile_corridor_level1_to_if_escalation(self):
+        """Cruise missiles heading toward Khmelnytskyi, Ternopil, or Lviv must create Level 1 targets
+        and smoothly escalate when turning toward Ivano-Frankivsk or Burshtyn.
+        """
+        t0 = datetime(2026, 10, 16, 15, 0, 0, tzinfo=UTC)
+        p1 = RawPost("kpszsu", 6001, "Група КР Х-101 курсом на Хмельницький", t0)
+        a1 = [a for a in self.tracker.process_message(p1, self.normalizer.parse(p1), now=t0) if not a.is_update]
+        self.assertEqual(len(a1), 1)
+        self.assertEqual(a1[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Хмельницький (ракетний коридор)", a1[0].title)
+
+        t1 = t0 + timedelta(minutes=4)
+        p2 = RawPost("monitoring_zaxid", 6002, "КР Х-101 продовжують рух на Тернопіль", t1)
+        a2 = [a for a in self.tracker.process_message(p2, self.normalizer.parse(p2), now=t1) if not a.is_update]
+        self.assertEqual(len(a2), 1)
+        self.assertEqual(a2[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Тернопіль (ракетний коридор)", a2[0].title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = t1 + timedelta(minutes=3)
+        p3 = RawPost("monitoring_zaxid", 6003, "КР Х-101 змінили курс на Івано-Франківськ!", t2)
+        a3 = [a for a in self.tracker.process_message(p3, self.normalizer.parse(p3), now=t2) if not a.is_update]
+        self.assertEqual(len(a3), 1)
+        self.assertEqual(a3[0].level, AlertLevel.LEVEL_3A)
+        self.assertFalse(a3[0].is_silent)
+        self.assertIn("Курс на Івано-Франківськ", a3[0].title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+    def test_missed_if_sequences_end_to_end(self):
+        """End-to-end verification of the missed sequences from 2026-10-16:
+        - 28309 (Martynivka) -> 28310 (IF raion danger) -> 28312 (Підвертає на Франківськ) -> 124063 (Monastyryska) -> 124068 (IF airport)
+        - 28452 (Kamianets with parenthetical preventive) -> 28456 (south Ternopil towards IF) -> 124290 (Rivne + IF) -> 28458 (Tlumach)
+        """
+        t0 = datetime(2026, 10, 16, 4, 33, 50, tzinfo=UTC)
+        seq1 = [
+            (t0, "monitoring_zaxid", 28309, "Тернопільська область:\n1 реактивна герань поблизу Чорткова, курс на Мартинівку"),
+            (t0 + timedelta(seconds=37), "monitoring_zaxid", 28310, "Івано-Франківський район - дронова небезпека по реактиву на Тернопільщині"),
+            (t0 + timedelta(seconds=74), "monitoring_zaxid", 28312, "Підвертає на Франківськ \n\n❗️"),
+            (t0 + timedelta(seconds=144), "kudy_letyt", 124063, "Реактивний БпЛА курсом на Монастириська"),
+            (t0 + timedelta(seconds=288), "kudy_letyt", 124064, "Реактивний БпЛА курсом на Єзупіль"),
+            (t0 + timedelta(seconds=471), "kudy_letyt", 124068, "Івано-Франківськ: реактивний БпЛА курсом на аеропорт"),
+        ]
+        emitted1 = []
+        for ts, ch, mid, txt in seq1:
+            post = RawPost(ch, mid, txt, ts)
+            evts = [a for a in self.tracker.process_message(post, self.normalizer.parse(post), now=ts) if not a.is_update]
+            emitted1.extend(evts)
+
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        levels1 = [a.level for a in emitted1]
+        self.assertIn(AlertLevel.LEVEL_2, levels1)
+        self.assertIn(AlertLevel.LEVEL_3A, levels1)
+        self.assertIn(AlertLevel.LEVEL_3B, levels1)
+
+    def test_suburban_level_3b_settlements(self):
+        """All 9 suburbs around Ivano-Frankivsk (Вовчинці, Підпечери, Клузів, Ямниця, Угринів,
+        Микитинці, Драгомирчани, Крихівці, Черніїв) and their inflections must trigger LEVEL_3B.
+        """
+        cases = [
+            ("Реактивний БпЛА курсом на Вовчинці", "vovchyntsi", "Вовчинці"),
+            ("Реактивний БпЛА над Вовчинцем", "vovchyntsi", "Вовчинці"),
+            ("Реактивний БпЛА в районі Підпечер", "pidpechery", "Підпечери"),
+            ("Реактивний БпЛА повз Клузів", "kluziv", "Клузів"),
+            ("Реактивний БпЛА курсом на Ямницю", "yamnytsia", "Ямниця"),
+            ("Реактивний БпЛА біля Угринова", "uhryniv", "Угринів"),
+            ("Реактивний БпЛА у напрямку Микитинців", "mykytyntsi", "Микитинці"),
+            ("Реактивний БпЛА над Драгомирчанами", "drahomyrchany", "Драгомирчани"),
+            ("Реактивний БпЛА в районі Крихівців", "krykhivtsi", "Крихівці"),
+            ("Реактивний БпЛА курсом на Черніїв", "cherniiv", "Черніїв"),
+        ]
+        for idx, (text, expected_pid, expected_title_name) in enumerate(cases):
+            with self.subTest(text=text):
+                tracker = TargetTracker(self.cache)
+                ts = datetime(2026, 10, 16, 12, 0, 0, tzinfo=UTC) + timedelta(minutes=idx * 5)
+                post = RawPost("kudy_letyt", 95000 + idx, text, ts)
+                parsed = self.normalizer.parse(post)
+                self.assertEqual(parsed.points, [expected_pid])
+                alerts = tracker.process_message(post, parsed, now=ts)
+                self.assertEqual(len(alerts), 1)
+                self.assertEqual(alerts[0].level, AlertLevel.LEVEL_3B)
+                self.assertIn("Небезпека біля / над містом", alerts[0].title)
+                self.assertIn(expected_title_name, alerts[0].title)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

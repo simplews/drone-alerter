@@ -24,7 +24,15 @@ def calculate_eta(
     elapsed_minutes = max(0.0, (current_time_utc - post_time_utc).total_seconds() / 60.0)
 
     # 1. Find the base approach range from the point
-    if drone_type == DroneType.CONVENTIONAL:
+    if drone_type == DroneType.MISSILE:
+        if point.distance_km:
+            missile_speed = getattr(ref, "missile_speed_kmh", [750.0, 880.0])
+            base_min, base_max = physics_interval(point.distance_km, missile_speed, ref.post_lag_min)
+            base_min = round(base_min)
+            base_max = round(base_max)
+        else:
+            base_min, base_max = 3.0, 10.0
+    elif drone_type == DroneType.CONVENTIONAL:
         if point.distance_km:
             conv_speed = getattr(ref, "conventional_speed_kmh", [150.0, 185.0])
             base_min, base_max = physics_interval(point.distance_km, conv_speed, ref.post_lag_min)
@@ -69,11 +77,27 @@ def calculate_eta(
     return rem_min, rem_max, window_start, window_end, window_str
 
 
+LEVEL_3B_POINT_IDS = frozenset({
+    "tysmenytsia",
+    "pidpechery",
+    "yamnytsia",
+    "cherniiv",
+    "drahomyrchany",
+    "khryplyn",
+    "kluziv",
+    "vovchyntsi",
+    "uhryniv",
+    "mykytyntsi",
+    "krykhivtsi",
+    "ivano_frankivsk",
+})
+
+
 def determine_level(point_id: str, point_level: int, is_regional: bool = False) -> AlertLevel:
     """Select the alert level from the point and its level in the reference."""
     if is_regional:
         return AlertLevel.REGIONAL
-    if point_id in ("tysmenytsia", "khryplyn"):
+    if point_id in LEVEL_3B_POINT_IDS:
         return AlertLevel.LEVEL_3B
     if point_id in ("chernelytsia", "tlumach") or point_level == 3:
         return AlertLevel.LEVEL_3A
