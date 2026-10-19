@@ -558,9 +558,77 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(res_der.action, ActionType.DIVERTED)
         self.assertEqual(res_der.divert_destination, "Деражні")
 
+    def test_lisovi_hrynivtsi_and_cross_oblast_homonyms_do_not_trigger_tlumach(self):
+        """Regression test for 2026-10-19 false Level 3A Tlumach alerts (kudy_letyt/125261 & 125305):
+        - 'Лісові Гринівці' in Khmelnytskyi region must NEVER match 'tlumach' ('гринівці').
+        - 'Озеряни' in Ternopil region ('на Скалу-Подільську/Озеряни') must match only 'skala_podilska', NOT 'tlumach'.
+        - 'Гринівці' under '**Івано-Франківськ:**' DOES match 'tlumach'.
+        - Cross-oblast suburb homonyms ('Микитинці' under 'Хмельниччина:', 'Вовчинці' under 'Вінниччина:') must NOT match IF suburbs.
+        """
+        t0 = datetime(2026, 10, 19, 13, 14, 51, tzinfo=UTC)
+
+        # 1. Exact kudy_letyt/125261
+        p_125261 = RawPost(
+            "kudy_letyt",
+            125261,
+            "Хмельниччина:\nРеактивний БпЛА звернув на Лісові Гринівці",
+            t0,
+        )
+        res_125261 = self.normalizer.parse(p_125261)
+        self.assertEqual(res_125261.points, [])
+
+        # 2. Exact kudy_letyt/125267
+        p_125267 = RawPost(
+            "kudy_letyt",
+            125267,
+            "Хмельниччина:\nРеактивний БпЛА повз Меджибіж тримає курс на Лісові Гринівці",
+            t0 + timedelta(minutes=13),
+        )
+        res_125267 = self.normalizer.parse(p_125267)
+        self.assertEqual(res_125267.points, [])
+
+        # 3. Exact kudy_letyt/125305
+        p_125305 = RawPost(
+            "kudy_letyt",
+            125305,
+            "Хмельниччина:\nРеактивний БпЛА курсом на Лісові Гринівці",
+            t0 + timedelta(minutes=95),
+        )
+        res_125305 = self.normalizer.parse(p_125305)
+        self.assertEqual(res_125305.points, [])
+
+        # 4. Ternopil Ozeriany must not jump to Tlumach
+        p_ozer = RawPost(
+            "monitoring_zaxid",
+            28901,
+            "Тернопільщина:\n1 реактивна герань на Скалу-Подільську/Озеряни",
+            t0 + timedelta(minutes=100),
+        )
+        res_ozer = self.normalizer.parse(p_ozer)
+        self.assertEqual(res_ozer.points, ["skala_podilska"])
+
+        # 5. Real Hrynivtsi under Ivano-Frankivsk header DOES match tlumach
+        p_if_hryn = RawPost(
+            "kudy_letyt",
+            125999,
+            "**Івано-Франківськ:**\n2х Реактивні БпЛА курсом на Гринівці",
+            t0 + timedelta(minutes=110),
+        )
+        res_if_hryn = self.normalizer.parse(p_if_hryn)
+        self.assertEqual(res_if_hryn.points, ["tlumach"])
+        self.assertEqual(res_if_hryn.count, 2)
+
+        # 6. Cross-oblast suburb homonyms (Микитинці in Khmelnytskyi raion, Вовчинці in Vinnytsia oblast)
+        p_myk = RawPost("kudy_letyt", 126001, "Хмельниччина:\nРеактивний БпЛА курсом на Микитинці", t0 + timedelta(minutes=120))
+        self.assertEqual(self.normalizer.parse(p_myk).points, [])
+
+        p_vov = RawPost("kudy_letyt", 126002, "Вінниччина:\nРеактивний БпЛА курсом на Вовчинці", t0 + timedelta(minutes=125))
+        self.assertEqual(self.normalizer.parse(p_vov).points, [])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
