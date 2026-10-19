@@ -849,6 +849,108 @@ class TestTargetTracker(unittest.TestCase):
                 self.assertIn("Небезпека біля / над містом", alerts[0].title)
                 self.assertIn(expected_title_name, alerts[0].title)
 
+    def test_oct18_geran5_sequence_no_false_missile_alert(self):
+        """End-to-end replay of the 2026-10-18 19:26-19:46 UTC episode:
+        Ensure 'ракета-дрон «Герань-5»' and subsequent Khmelnytskyi/Chornyi Ostriv posts
+        never create a DroneType.MISSILE target or emit a cruise missile alert.
+        """
+        t0 = datetime(2026, 10, 18, 19, 26, 20, tzinfo=UTC)
+        posts = [
+            (t0, "kudy_letyt", 124865, "Хмельниччина:\nРеактивний БпЛА курсом на Дунаївці"),
+            (
+                t0 + timedelta(seconds=13),
+                "monitoring_zaxid",
+                28673,
+                "За уточненою інформацією та порівнянням ТТХ, вдалось визначити, що на Вінниччині в напрямку Козятина рухається не «Бандероль», а ракета-дрон «Герань-5»",
+            ),
+            (
+                t0 + timedelta(minutes=4, seconds=6),
+                "monitoring_zaxid",
+                28676,
+                "Хмельниччина:\n1 реактивна герань поблизу Нової Ушиці, західний курс",
+            ),
+            (
+                t0 + timedelta(minutes=7, seconds=17),
+                "monitoring_zaxid",
+                28679,
+                "Йде повз Дунаївці у бік Камʼянця-Подільського",
+            ),
+            (
+                t0 + timedelta(minutes=9, seconds=4),
+                "monitoring_zaxid",
+                28680,
+                "Наразі рухається на північ області в напрямку Ярмолинців/Хмельницького",
+            ),
+            (
+                t0 + timedelta(minutes=19, seconds=25),
+                "monitoring_zaxid",
+                28681,
+                "Хмельницький: Чорний Острів повз західні околиці ❗️",
+            ),
+        ]
+        all_alerts = []
+        for ts, ch, mid, txt in posts:
+            post = RawPost(ch, mid, txt, ts)
+            parsed = self.normalizer.parse(post)
+            self.assertNotEqual(parsed.drone_type, DroneType.MISSILE, txt)
+            all_alerts.extend(self.tracker.process_message(post, parsed, now=ts))
+
+        for alert in all_alerts:
+            self.assertNotIn("крилата ракета", alert.title)
+            self.assertNotIn("ракетний коридор", alert.title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_oct19_lviv_jet_course_to_if_diverts_back_to_lviv(self):
+        """End-to-end replay of 2026-10-19 05:04-05:07 UTC episode:
+        A jet drone in Lviv region briefly takes a course toward Ivano-Frankivsk oblast (if_direct_course, Level 3A)
+        and then turns back to Lviv ('Реактивний БпЛА повертається на Львів').
+        Must transition the active target to DIVERTED.
+        """
+        t0 = datetime(2026, 10, 19, 5, 4, 40, tzinfo=UTC)
+        p1 = RawPost("monitoring_zaxid", 28766, "Львівщина:\n1 реактивна герань на Миколаїв/Новий Розділ віддаляється", t0)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t0)
+
+        t1 = t0 + timedelta(seconds=38)
+        p2 = RawPost("monitoring_zaxid", 28767, "Взяв курс на Франківщину взагалі", t1)
+        alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=t1)
+        self.assertEqual(len(alerts2), 1)
+        self.assertEqual(alerts2[0].level, AlertLevel.LEVEL_3A)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = t0 + timedelta(minutes=2, seconds=24)
+        p3 = RawPost("kudy_letyt", 125084, "Львівщина:\nРеактивний БпЛА повертається на Львів", t2)
+        parsed3 = self.normalizer.parse(p3)
+        self.assertEqual(parsed3.action, ActionType.DIVERTED)
+        alerts3 = self.tracker.process_message(p3, parsed3, now=t2)
+        self.assertEqual(len(alerts3), 1)
+        self.assertEqual(alerts3[0].title, "Ціль змінила курс")
+        self.assertIn("Львів", alerts3[0].body)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_dunaivtsi_and_kelmentsi_do_not_cross_merge(self):
+        """Ensure a drone at Dunaivtsi (central Khmelnytskyi) and a drone at Vendychany crossing into
+        Novodnistrovsk/Kelmentsi (Bukovyna) stay on separate tracks.
+        """
+        t0 = datetime(2026, 10, 18, 4, 0, 52, tzinfo=UTC)
+        digest_124719 = (
+            "Вінниччина:\n"
+            "БпЛА курсом на Вендичани\n\n"
+            "Хмельниччина:\n"
+            "БпЛА курсом на Дунаївці"
+        )
+        p_124719 = RawPost("kudy_letyt", 124719, digest_124719, t0)
+        self.tracker.process_message(p_124719, self.normalizer.parse(p_124719), now=t0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        t2 = t0 + timedelta(minutes=15)
+        p_buk = RawPost("kudy_letyt", 124726, "Буковина:\nБпЛА курсом на Новодністровськ", t2)
+        self.tracker.process_message(p_buk, self.normalizer.parse(p_buk), now=t2)
+
+        active = {t.last_point_id: t for t in self.tracker.get_active_targets()}
+        self.assertIn("dunaivtsi", active)
+        self.assertIn("kelmentsi", active)
+        self.assertIn("vendychany", active["kelmentsi"].points_sequence)
+
 
 if __name__ == "__main__":
     unittest.main()

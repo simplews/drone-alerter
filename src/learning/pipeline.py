@@ -67,9 +67,10 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
                 index[norm] = pid
                 log.append(f"Назва «{norm}» -> {pid}")
 
-    # 2. Distances and speed of the jet drones.
+    # 2. Distances, profile metadata, and speed of the jet drones.
     from .reference import seed_from_profile
-    seed_points = seed_from_profile().points
+    seed_ref = seed_from_profile()
+    seed_points = seed_ref.points
     for pid, sp in seed_points.items():
         if pid not in cand.points:
             cand.points[pid] = PointRef(
@@ -79,12 +80,41 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
                 distance_km=sp.distance_km,
                 eta_min=sp.eta_min,
                 eta_max=sp.eta_max,
-                eta_method="prior",
+                eta_method="prior" if sp.eta_min is not None else "none",
+                is_regional=sp.is_regional,
+                is_contextual=sp.is_contextual,
+                name_gen=sp.name_gen,
             )
             log.append(f"Новий пункт з профілю {pid} (рівень {sp.level})")
-        elif cand.points[pid].distance_km is None:
-            cand.points[pid].distance_km = sp.distance_km
+        else:
+            cp = cand.points[pid]
+            if cp.distance_km is None and sp.distance_km is not None:
+                cp.distance_km = sp.distance_km
+            cp.is_regional = sp.is_regional
+            cp.is_contextual = sp.is_contextual
+            cp.name_gen = sp.name_gen
+            for name in sp.names:
+                norm_n = normalize(name) if not sp.is_contextual else name
+                if name not in cp.names and norm_n not in index:
+                    cp.names.append(name)
+                    if not sp.is_contextual:
+                        index[norm_n] = pid
+                    log.append(f"Назва з профілю «{name}» -> {pid}")
 
+    cand.conventional_speed_kmh = list(seed_ref.conventional_speed_kmh)
+    cand.missile_speed_kmh = list(seed_ref.missile_speed_kmh)
+    for kw in seed_ref.target_keywords:
+        if kw not in cand.target_keywords:
+            cand.target_keywords.append(kw)
+            log.append(f"Ключове слово цілі з профілю: «{kw}»")
+    if seed_ref.cancel_keywords and cand.cancel_keywords != seed_ref.cancel_keywords:
+        added_ckw = [k for k in seed_ref.cancel_keywords if k not in cand.cancel_keywords]
+        cand.cancel_keywords = list(seed_ref.cancel_keywords)
+        if added_ckw:
+            log.append(f"Слова скасування з профілю: +{len(added_ckw)}")
+    for sw in seed_ref.stopwords:
+        if sw not in cand.stopwords:
+            cand.stopwords.append(sw)
 
     cand.post_lag_min = [0.5, 1.5]
     speed = fit_speed(observations, cand.points, cfg)
@@ -98,12 +128,13 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
         log.append(f"Швидкість {cand.speed_kmh} -> {speed} км/год")
         cand.speed_kmh = speed
 
-    # 3. ETA for each point.
+    # 3. ETA for each main-corridor point (skip regional and contextual points).
     durations: dict[str, list[float]] = defaultdict(list)
     for obs in observations:
         durations[obs.point_id].append(obs.minutes_to_arrival)
     for pid, point in cand.points.items():
-
+        if point.is_regional or point.is_contextual:
+            continue
         result = calibrate_point(point, durations.get(pid, []), cand.speed_kmh, cand.post_lag_min, cfg)
         if result is None:
             continue
