@@ -90,7 +90,7 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
             self.assertIn("залишайтеся уважними", body)
 
     def test_downed_alert_does_not_contain_point_name(self):
-        """Verify shoot-down and target loss alerts do not publish the point name."""
+        """Verify shoot-down and target loss alerts do not publish the point name and respect siren state."""
         cases = [
             ("Тлумач", "2х Реактивні БпЛА через Тлумач", "Біля Тлумача одну збито!"),
             ("Борщів", "2х Реактивні БпЛА на Борщів", "В районі Борщева одну ціль збито!"),
@@ -98,25 +98,34 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         ]
 
         for pt_name, initial_text, downed_text in cases:
-            with self.subTest(point=pt_name):
-                tracker = TargetTracker(self.cache)
-                p1 = RawPost("chan_a", 10, initial_text, T0)
-                alerts1 = tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
-                self.assertEqual(len(alerts1), 1)
+            for siren_active in (False, True):
+                with self.subTest(point=pt_name, siren_active=siren_active):
+                    tracker = TargetTracker(self.cache, is_siren_active_fn=lambda s=siren_active: s)
+                    p1 = RawPost("chan_a", 10, initial_text, T0)
+                    alerts1 = tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
+                    self.assertEqual(len(alerts1), 1)
 
-                # Partial shoot-down
-                p2 = RawPost("chan_a", 11, downed_text, T0 + timedelta(minutes=2))
-                alerts2 = tracker.process_message(p2, self.normalizer.parse(p2), now=T0 + timedelta(minutes=2))
-                self.assertEqual(len(alerts2), 1)
-                self.assertNotIn(pt_name, alerts2[0].body)
-                self.assertIn("до офіційного відбою", alerts2[0].body)
+                    # Partial shoot-down
+                    p2 = RawPost("chan_a", 11, downed_text, T0 + timedelta(minutes=2))
+                    alerts2 = tracker.process_message(p2, self.normalizer.parse(p2), now=T0 + timedelta(minutes=2))
+                    self.assertEqual(len(alerts2), 1)
+                    self.assertNotIn(pt_name, alerts2[0].body)
+                    if siren_active:
+                        self.assertIn("до офіційного відбою", alerts2[0].body)
+                    else:
+                        self.assertNotIn("до офіційного відбою", alerts2[0].body)
+                        self.assertIn("не ігноруйте сигнали повітряної тривоги", alerts2[0].body)
 
-                # Final shoot-down
-                p3 = RawPost("chan_a", 12, "Другу також знищено", T0 + timedelta(minutes=4))
-                alerts3 = tracker.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=4))
-                self.assertEqual(len(alerts3), 1)
-                self.assertNotIn(pt_name, alerts3[0].body)
-                self.assertIn("до офіційного відбою", alerts3[0].body)
+                    # Final shoot-down
+                    p3 = RawPost("chan_a", 12, "Другу також знищено", T0 + timedelta(minutes=4))
+                    alerts3 = tracker.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=4))
+                    self.assertEqual(len(alerts3), 1)
+                    self.assertNotIn(pt_name, alerts3[0].body)
+                    if siren_active:
+                        self.assertIn("до офіційного відбою", alerts3[0].body)
+                    else:
+                        self.assertNotIn("до офіційного відбою", alerts3[0].body)
+                        self.assertIn("не ігноруйте сигнали повітряної тривоги", alerts3[0].body)
 
     def test_lost_timeout_alert_mentions_threat_remains(self):
         """Verify timeout alerts explicitly state that lack of updates does not mean danger is gone."""

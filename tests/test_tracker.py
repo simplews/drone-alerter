@@ -77,7 +77,7 @@ class TestTargetTracker(unittest.TestCase):
 
 
     def test_multi_target_decrement_on_downed(self):
-        # 2 targets to Tlumach
+        # 1. Without active siren (default in self.tracker)
         p1 = RawPost("chan_a", 20, "2х Реактивні БпЛА через Тлумач", T0)
         alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
         self.assertEqual(len(alerts1), 1)
@@ -85,23 +85,40 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0].target_count, 2)
 
-        # Message about a shoot-down of one target
+        # Message about a shoot-down of one target (no siren active)
         p2 = RawPost("chan_a", 21, "Біля Тлумача одну збито!", T0 + timedelta(minutes=2))
         alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=T0 + timedelta(minutes=2))
         self.assertEqual(len(alerts2), 1)
         self.assertIn("Ще 1 ціль(і) може бути в повітрі", alerts2[0].body)
-        self.assertIn("до офіційного відбою", alerts2[0].body)
+        self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її буде оголошено", alerts2[0].body)
+        self.assertNotIn("до офіційного відбою", alerts2[0].body)
         # The target stays active!
         self.assertEqual(targets[0].status, TargetStatus.ACTIVE)
         self.assertEqual(targets[0].target_count, 1)
 
-        # Shoot-down of the last target
+        # Shoot-down of the last target (no siren active)
         p3 = RawPost("chan_a", 22, "Другу також збили біля Тлумача", T0 + timedelta(minutes=4))
         alerts3 = self.tracker.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=4))
         self.assertEqual(len(alerts3), 1)
         self.assertEqual(targets[0].status, TargetStatus.PROBABLY_DOWNED)
         self.assertIn("імовірно, уражена або втрачена", alerts3[0].body)
-        self.assertIn("до офіційного відбою", alerts3[0].body)
+        self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її все ж буде оголошено", alerts3[0].body)
+        self.assertNotIn("до офіційного відбою", alerts3[0].body)
+
+        # 2. With active siren
+        tracker_siren = TargetTracker(self.cache, is_siren_active_fn=lambda: True)
+        p4 = RawPost("chan_a", 23, "2х Реактивні БпЛА через Тлумач", T0)
+        tracker_siren.process_message(p4, self.normalizer.parse(p4), now=T0)
+
+        p5 = RawPost("chan_a", 24, "Біля Тлумача одну збито!", T0 + timedelta(minutes=2))
+        alerts5 = tracker_siren.process_message(p5, self.normalizer.parse(p5), now=T0 + timedelta(minutes=2))
+        self.assertEqual(len(alerts5), 1)
+        self.assertIn("Залишайтеся в укриттях до офіційного відбою", alerts5[0].body)
+
+        p6 = RawPost("chan_a", 25, "Другу також збили біля Тлумача", T0 + timedelta(minutes=4))
+        alerts6 = tracker_siren.process_message(p6, self.normalizer.parse(p6), now=T0 + timedelta(minutes=4))
+        self.assertEqual(len(alerts6), 1)
+        self.assertIn("Це не скасування тривоги: залишайтеся в укриттях до офіційного відбою ОВА/ПС.", alerts6[0].body)
 
     def test_cross_channel_deduplication(self):
         # Channel A: Borshchiv at 21:30
