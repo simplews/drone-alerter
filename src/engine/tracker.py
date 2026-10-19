@@ -30,19 +30,24 @@ _FAR_NORTH_DEST_RE = re.compile(
     r"кременец\w*|шумськ\w*|ланівц\w*|вишнівец\w*|збараж\w*)\b"
 )
 _EAST_UPSTREAM_DEST_RE = re.compile(
-    r"(?i)\b(шаргород\w*|віньківц\w*|вовковинц\w*|деражн\w*|стару\s+синяву|стара\s+синява)\b"
+    r"(?i)\b(шаргород\w*|копайгород\w*|віньківц\w*|вовковинц\w*|деражн\w*|"
+    r"меджибіж\w*|головчинц\w*|голосків\w*|пилявк\w*|стару\s+синяву|стара\s+синява)\b"
 )
 _KHMELNYTSKYI_DEST_RE = re.compile(
     r"(?i)\b(хмельницьк\w*|городок\w*|закупн\w*|смотрич\w*|чемерівц\w*|ярмолинц\w*|"
-    r"красилів\w*|волочиськ\w*|сатанів\w*|старокостянтинів\w*|куч[уаі]\b)\b"
+    r"красилів\w*|волочиськ\w*|сатанів\w*|старокостянтинів\w*|чорний\s+острів|"
+    r"війтівц\w*|антонін\w*|галузинц\w*|волоськ\w*|полонн\w*|старий\s+остропіль|"
+    r"гриців\w*|куч[уаі]\b)\b"
 )
 _TERNOPIL_LVIV_DEST_RE = re.compile(
     r"(?i)\b(гусятин\w*|чортків\w*|копичинц\w*|хоростків\w*|теребовл\w*|микулинц\w*|"
     r"козов\w*|тернопіль\w*|бережан\w*|підгайц\w*|монастириськ\w*|бучач\w*|"
-    r"перемишлян\w*|поморян\w*|львів\w*|винник\w*)\b"
+    r"перемишлян\w*|поморян\w*|львів\w*|винник\w*|миколаїв\w*|новий\s+розділ|"
+    r"радехів\w*|лопатин\w*)\b"
 )
 _LVIV_BORDER_DEST_RE = re.compile(
-    r"(?i)\b(перемишлян\w*|поморян\w*|львів\w*|винник\w*|стрий\w*|жидaчів\w*|ходарів\w*|рогатин\w*)\b"
+    r"(?i)\b(перемишлян\w*|поморян\w*|львів\w*|винник\w*|стрий\w*|жидaчів\w*|жидачів\w*|"
+    r"ходарів\w*|ходорів\w*|рогатин\w*|миколаїв\w*|новий\s+розділ|радехів\w*|лопатин\w*)\b"
 )
 _CARDINAL_DEST_RE = re.compile(
     r"(?i)\b(північ\w*|південь\w*|південн\w*|схід\w*|східн\w*|захід\w*|західн\w*)\b"
@@ -85,6 +90,7 @@ class TargetTracker:
         target_level: AlertLevel,
         is_regional: bool,
         dest: str | None,
+        is_contextual: bool = False,
     ) -> bool:
         """Check if an unanchored divert destination is geographically compatible with the target's corridor position."""
         dest_norm = normalize(dest) if dest else ""
@@ -109,7 +115,7 @@ class TargetTracker:
 
         # 1. Targets already inside Ivano-Frankivsk oblast (<= 65 km or Level 3A/3B)
         if target_dist_km <= 65.0 or target_level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B):
-            return bool(is_regional and dest_norm and _LVIV_BORDER_DEST_RE.search(dest_norm))
+            return bool((is_regional or is_contextual) and dest_norm and _LVIV_BORDER_DEST_RE.search(dest_norm))
 
         # 2. Targets in Southern Ternopilska oblast (65 < d < 120 km: Skala-Podilska, Borshchiv, Tovste)
         if target_dist_km < 120.0:
@@ -172,6 +178,13 @@ class TargetTracker:
 
             last_point = ref.points.get(target.last_point_id)
             if not last_point:
+                continue
+
+            # Prevent cross-corridor merging between central Khmelnytskyi (Dunaivtsi) and Bukovyna (Kelmentsi/Novodnistrovsk)
+            if (
+                (target.last_point_id == "dunaivtsi" and point_id == "kelmentsi")
+                or (target.last_point_id == "kelmentsi" and point_id == "dunaivtsi")
+            ):
                 continue
 
             # If target has already reached Level 3 (immediate approach or over city),
@@ -527,8 +540,9 @@ class TargetTracker:
                     p_cand = ref.points.get(cand.last_point_id)
                     cand_dist = p_cand.distance_km if p_cand else None
                     cand_reg = bool(getattr(p_cand, "is_regional", False)) if p_cand else False
+                    cand_ctx = bool(getattr(p_cand, "is_contextual", False)) if p_cand else False
                     for d in dest_candidates:
-                        if self._is_divert_compatible(cand_dist, cand.level, cand_reg, d):
+                        if self._is_divert_compatible(cand_dist, cand.level, cand_reg, d, is_contextual=cand_ctx):
                             target = cand
                             matched_dest = d
                             break

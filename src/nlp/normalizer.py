@@ -11,7 +11,7 @@ from src.learning.text import format_place_title, normalize
 # Patterns for the number of targets
 _COUNT_PATTERNS = [
     (re.compile(r"(?i)\b(\d+)\s*(?:х|x)\b"), lambda m: int(m.group(1))),
-    (re.compile(r"(?i)\b(\d+)\s+(?:реактивн|бпла|шахед|геран|ракет|крилат|калібр|кр\b)"), lambda m: int(m.group(1))),
+    (re.compile(r"(?i)\b(\d+)\s+(?:реактивн|бпла|шахед|геран|бандерол|ракет|крилат|калібр|кр\b)"), lambda m: int(m.group(1))),
     (re.compile(r"(?i)\bдві\s+(?:реактивн|ракет|крилат|кр\b)"), lambda _: 2),
     (re.compile(r"(?i)\bпара\s+(?:реактивн|ракет|крилат|калібр|кр\b)"), lambda _: 2),
     (re.compile(r"(?i)\bтри\s+(?:реактивн|ракет|крилат|кр\b)"), lambda _: 3),
@@ -19,9 +19,11 @@ _COUNT_PATTERNS = [
     (re.compile(r"(?i)\bодна\s+(?:реактивн|ракет|крилат|кр\b)"), lambda _: 1),
 ]
 
-# Patterns for cruise missiles (Kh-101, Kalibr, etc.)
+# Patterns for cruise missiles (Kh-101, Kalibr, etc.), excluding rocket-drones ("ракета-дрон") and ballistic/SAM missiles
 _MISSILE_KW_RE = re.compile(
-    r"(?i)\b([хx]-?101(?:/555)?|[хx]-?555|[хx]-?55|калібр\w*|крилат\w+\s+ракет\w*|кр\b|ракет[аиуою]\b|група\s+ракет)\b"
+    r"(?i)(?<!балістична\s)(?<!балістичні\s)(?<!балістичної\s)(?<!зенітна\s)(?<!протикорабельна\s)"
+    r"\b([хx]-?101(?:/555)?|[хx]-?555|[хx]-?55|калібр\w*|крилат\w+\s+ракет\w*|кр\b|"
+    r"ракет[аиуою](?!\s*-?\s*дрон)\b|група\s+ракет(?!\s*-?\s*дрон)\b)"
 )
 
 # Patterns for conventional / propeller drones
@@ -29,7 +31,7 @@ _CONVENTIONAL_KW_RE = re.compile(
     r"(?i)\b(шахед-136|shahed-136|геран-2|герань-2|мопед\w*|поршнев\w*|гвинтов\w*|звичайні?\s+шахед\w*|звичайні?\s+бпла)\b"
 )
 _GENERAL_DRONE_RE = re.compile(
-    r"(?i)\b(шахед\w*|геран\w*|бпла)\b"
+    r"(?i)\b(шахед\w*|геран\w*|бпла|бандерол\w*|ракет[аиуою]-дрон\w*|ракето-дрон\w*)\b"
 )
 
 # Patterns for actions
@@ -180,17 +182,17 @@ class MessageNormalizer:
     @classmethod
     def _extract_divert_destination(cls, line_norm: str, cancel_keywords: list[str]) -> str | None:
         """Extract destination or cardinal direction the target diverted to."""
-        # 1. Check known cancel/divert keywords from profile that start with "на " or "повз "
+        # 1. Check known cancel/divert keywords from profile that start with "на ", "повз ", or "до "
         # Sort by length descending to match more specific phrases first (e.g. "на стару синяву" before "на синяву")
         kw_candidates = [
             kw.strip() for kw in cancel_keywords
-            if kw.lower().startswith(("на ", "повз "))
+            if kw.lower().startswith(("на ", "повз ", "до "))
         ]
         kw_candidates.sort(key=len, reverse=True)
         for kw in kw_candidates:
             if re.search(rf"(?i)\b{re.escape(kw)}\b", line_norm):
-                # Clean prefix "на " or "повз "
-                dest = re.sub(r"^(?:на|повз)\s+", "", kw, flags=re.IGNORECASE).strip()
+                # Clean prefix "на ", "повз ", or "до "
+                dest = re.sub(r"^(?:на|повз|до)\s+", "", kw, flags=re.IGNORECASE).strip()
                 if dest:
                     return cls._normalize_divert_dest(dest)
 
@@ -229,12 +231,19 @@ class MessageNormalizer:
     def _extract_target_type(text: str) -> str | None:
         """Extract explicit target type name if mentioned in the message text."""
         norm = normalize(text)
-        # Check cruise missile patterns first
+        # Check specific rocket-drones / jet drones before generic "ракета"
+        if re.search(r"(?i)\b(геран-5|герань-5)\b", norm):
+            return "Герань-5"
+        if re.search(r"(?i)\b(ракет[аиуою]-дрон\w*|ракето-дрон\w*)\b", norm):
+            return "ракета-дрон"
+        if re.search(r"(?i)\b(бандерол\w*)\b", norm):
+            return "Бандероль"
+        # Check cruise missile patterns
         if re.search(r"(?i)\b([хx]-?101(?:/555)?|[хx]-?555|[хx]-?55)\b", norm):
             return "КР Х-101"
         if re.search(r"(?i)\b(калібр\w*)\b", norm):
             return "КР Калібр"
-        if re.search(r"(?i)\b(крилат\w+\s+ракет\w*|кр\b|ракет[аиуою]\b|група\s+ракет)\b", norm):
+        if _MISSILE_KW_RE.search(norm):
             return "крилата ракета"
         # Check drone patterns from specific to general
         if re.search(r"(?i)\b(шахед-238|shahed-238)\b", norm):
@@ -272,7 +281,7 @@ class MessageNormalizer:
         return any(
             bool(re.search(rf"(?i)\b{re.escape(kw.lower())}\b", line_norm))
             for kw in cancel_keywords
-            if kw.lower().startswith(("на ", "повз ")) or "відверн" in kw.lower() or "курс" in kw.lower()
+            if kw.lower().startswith(("на ", "повз ", "до ")) or "відверн" in kw.lower() or "курс" in kw.lower()
         )
 
     @staticmethod
@@ -298,20 +307,26 @@ class MessageNormalizer:
         # 1. Check for context inheritance
         now = post.posted_at_utc
         last_jet_time = self._channel_jet_context.get(post.channel)
-        inherited_jet = bool(
-            (last_jet_time and (now - last_jet_time) <= self._context_window)
-            or (self._last_any_jet_time and (now - self._last_any_jet_time) <= self._context_window)
-        )
+        effective_jet_time: datetime | None = None
+        if last_jet_time and (now - last_jet_time) <= self._context_window:
+            effective_jet_time = last_jet_time
+        elif self._last_any_jet_time and (now - self._last_any_jet_time) <= self._context_window:
+            effective_jet_time = self._last_any_jet_time
+        inherited_jet = effective_jet_time is not None
+
         ch_missile = self._channel_missile_context.get(post.channel)
         any_missile = self._last_any_missile_context
+        effective_missile: tuple[datetime, str | None] | None = None
+        if ch_missile and (now - ch_missile[0]) <= self._context_window:
+            effective_missile = ch_missile
+        elif any_missile and (now - any_missile[0]) <= self._context_window:
+            effective_missile = any_missile
+
         inherited_missile = False
         inherited_missile_type: str | None = None
-        if ch_missile and (now - ch_missile[0]) <= self._context_window:
+        if effective_missile and (effective_jet_time is None or effective_missile[0] > effective_jet_time):
             inherited_missile = True
-            inherited_missile_type = ch_missile[1]
-        elif any_missile and (now - any_missile[0]) <= self._context_window:
-            inherited_missile = True
-            inherited_missile_type = any_missile[1]
+            inherited_missile_type = effective_missile[1]
 
         post_has_explicit_missile = bool(_MISSILE_KW_RE.search(norm_text))
         post_has_explicit_jet = any(kw.lower() in norm_text for kw in ref.target_keywords)
@@ -420,9 +435,12 @@ class MessageNormalizer:
 
             # Determine whether this line is in cruise missile context
             line_has_drone_kw = bool(_GENERAL_DRONE_RE.search(line_norm) or any(kw.lower() in line_norm for kw in ref.target_keywords))
-            line_is_missile = bool(
+            line_has_explicit_missile = bool(
                 _MISSILE_KW_RE.search(line_norm)
-                or (post_has_explicit_missile and not line_has_drone_kw)
+                or (post_has_explicit_missile and not line_has_drone_kw and not post_has_explicit_jet)
+            )
+            line_is_missile = bool(
+                line_has_explicit_missile
                 or (inherited_missile and not line_has_drone_kw and not post_has_explicit_jet)
             )
 
@@ -486,14 +504,15 @@ class MessageNormalizer:
                     ):
                         line_points.append("ternopil_if_course")
                     elif re.search(r"(?i)\b(хмельниччин\w*|хмельницьк\w*|поділл\w*)\b", context_region_text):
-                        fallback_pid = "khmelnytskyi_missile" if line_is_missile and "khmelnytskyi_missile" in ref.points else "kamianets_podilskyi"
+                        fallback_pid = "khmelnytskyi_missile" if line_has_explicit_missile and "khmelnytskyi_missile" in ref.points else "kamianets_podilskyi"
                         if fallback_pid in ref.points and fallback_pid not in line_points:
                             line_points.append(fallback_pid)
                     elif "if_direct_course" in ref.points and "if_direct_course" not in line_points:
                         line_points.append("if_direct_course")
 
-            # For cruise missiles, directions toward Khmelnytskyi, Ternopil, or Lviv are Level 1 early-warning corridors
-            if line_is_missile and not line_points:
+            # For cruise missiles with an explicit missile keyword, directions toward Khmelnytskyi,
+            # Ternopil, or Lviv are Level 1 early-warning corridors.
+            if line_has_explicit_missile and not line_points:
                 context_region_text = f"{active_corridor_header_norm} {line_norm}".strip()
                 if _MISSILE_KHMELNYTSKYI_RE.search(context_region_text) and "khmelnytskyi_missile" in ref.points:
                     line_points.append("khmelnytskyi_missile")
@@ -611,24 +630,27 @@ class MessageNormalizer:
         has_corridor_activity = bool(
             points_found or action != ActionType.NONE or _CORRIDOR_REGION_RE.search(norm_target_text)
         )
+        has_missile_corridor_activity = bool(points_found or action != ActionType.NONE)
         extracted_type = self._extract_target_type(search_target_text)
 
-        if explicit_missile:
+        if explicit_missile and not explicit_jet:
             drone_type = DroneType.MISSILE
             is_jet = False
-            if has_corridor_activity:
+            if has_missile_corridor_activity:
                 self._channel_missile_context[post.channel] = (now, extracted_type)
                 self._last_any_missile_context = (now, extracted_type)
         elif explicit_jet:
             drone_type = DroneType.JET
             is_jet = True
+            self._channel_missile_context.pop(post.channel, None)
             if has_corridor_activity:
                 self._channel_jet_context[post.channel] = now
                 self._last_any_jet_time = now
         elif explicit_conventional:
             drone_type = DroneType.CONVENTIONAL
             is_jet = False
-        elif inherited_missile and not has_general_drone and has_corridor_activity:
+            self._channel_missile_context.pop(post.channel, None)
+        elif inherited_missile and not has_general_drone and has_missile_corridor_activity:
             drone_type = DroneType.MISSILE
             is_jet = False
             if extracted_type is None:
@@ -644,6 +666,8 @@ class MessageNormalizer:
         else:
             drone_type = DroneType.CONVENTIONAL
             is_jet = False
+            if has_general_drone:
+                self._channel_missile_context.pop(post.channel, None)
 
         # Bind the action to the specific action point or first found point
         if action == ActionType.DOWNED and downed_point_id:

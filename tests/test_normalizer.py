@@ -503,6 +503,61 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(res_if.points, ["if_direct_course"])
         self.assertEqual(res_if.action, ActionType.NONE)
 
+    def test_raketa_dron_geran5_and_chornyi_ostriv_not_missile(self):
+        """Regression test for 2026-10-18 false cruise missile alert:
+        - 'ракета-дрон «Герань-5»' and 'Бандероль' must be classified as DroneType.JET, NOT DroneType.MISSILE.
+        - Follow-up 'Хмельницький: Чорний Острів повз західні околиці ❗️' must be parsed as DIVERTED
+          and must never synthesize 'khmelnytskyi_missile'.
+        - 'підлітає до Деражні' must be parsed as ActionType.DIVERTED.
+        """
+        t0 = datetime(2026, 10, 18, 19, 26, 33, tzinfo=UTC)
+        p_28673 = RawPost(
+            "monitoring_zaxid",
+            28673,
+            "За уточненою інформацією та порівнянням ТТХ, вдалось визначити, що на Вінниччині в напрямку Козятина рухається не «Бандероль», а ракета-дрон «Герань-5»",
+            t0,
+        )
+        res_28673 = self.normalizer.parse(p_28673)
+        self.assertEqual(res_28673.drone_type, DroneType.JET)
+        self.assertTrue(res_28673.is_jet)
+        self.assertEqual(res_28673.target_type, "Герань-5")
+        self.assertEqual(res_28673.points, [])
+
+        p_28676 = RawPost(
+            "monitoring_zaxid",
+            28676,
+            "Хмельниччина:\n1 реактивна герань поблизу Нової Ушиці, західний курс",
+            t0 + timedelta(minutes=4),
+        )
+        res_28676 = self.normalizer.parse(p_28676)
+        self.assertEqual(res_28676.drone_type, DroneType.JET)
+        self.assertEqual(res_28676.points, ["nova_ushytsia"])
+
+        p_28681 = RawPost(
+            "monitoring_zaxid",
+            28681,
+            "Хмельницький: Чорний Острів повз західні околиці ❗️",
+            t0 + timedelta(minutes=19, seconds=12),
+        )
+        res_28681 = self.normalizer.parse(p_28681)
+        self.assertNotEqual(res_28681.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_28681.points, [])
+        self.assertEqual(res_28681.action, ActionType.NONE)
+
+        p_28682 = RawPost(
+            "monitoring_zaxid",
+            28682,
+            "Йде на/повз Красилів з курсом на північ ❗️",
+            t0 + timedelta(minutes=23, seconds=10),
+        )
+        res_28682 = self.normalizer.parse(p_28682)
+        self.assertEqual(res_28682.action, ActionType.DIVERTED)
+
+        p_der = RawPost("kudy_letyt", 124726, "Хмельниччина:\nБпЛА підлітає до Деражні", t0 + timedelta(minutes=25))
+        res_der = self.normalizer.parse(p_der)
+        self.assertEqual(res_der.action, ActionType.DIVERTED)
+        self.assertEqual(res_der.divert_destination, "Деражні")
+
 
 if __name__ == "__main__":
     unittest.main()
