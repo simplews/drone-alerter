@@ -1,7 +1,7 @@
 telethon>=1.45.0
 aiogram>=3.31.0
 fastapi>=0.115.0
-uvicorn>=0.30.0
+uvicorn>=0.54.0
 sqlalchemy>=2.0.35
 pydantic>=2.9.2
 pydantic-settings>=2.5.2
