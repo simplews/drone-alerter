@@ -1,6 +1,6 @@
 telethon>=1.45.0
 aiogram>=3.31.0
-fastapi>=0.115.0
+fastapi>=0.143.2
 uvicorn>=0.30.0
 sqlalchemy>=2.0.35
 pydantic>=2.9.2
