@@ -147,6 +147,26 @@ _CORRIDOR_REGION_RE = re.compile(
     r"(?i)\b(вінниччин|вінницьк|хмельниччин|хмельницьк|тернопіль|франків|прикарпат|буковин|чернівецьк|львів)\w*"
 )
 
+# Multi-word non-corridor settlement names that share a token with a corridor alias
+# (e.g. "Лісові Гринівці" near Khmelnytskyi vs "Гринівці" near Tlumach)
+_NON_CORRIDOR_COMPOUND_PLACE_RE = re.compile(
+    r"(?i)\b(лісов\w*\s+гринівц\w*|велик\w*\s+озерян\w*|мал\w*\s+озерян\w*|"
+    r"стар\w*\s+мартинів\w*|нов\w*\s+мартинів\w*)\b"
+)
+
+_IF_REGION_CONTEXT_RE = re.compile(
+    r"(?i)\b(франків\w*|прикарпат\w*|іф|тлумач\w*|тисмениц\w*|коломи\w*|калуш\w*|калуськ\w*|"
+    r"бурштин\w*|галич\w*|галицьк\w*|рогатин\w*|городенк\w*|богородчан\w*|отині\w*|"
+    r"єзупіл\w*|єзупол\w*|чернелиц\w*|хриплин\w*)\b"
+)
+_NON_IF_OBLAST_RE = re.compile(
+    r"(?i)\b(вінниччин\w*|вінницьк\w*|хмельниччин\w*|хмельницьк\w*|тернопіль\w*|"
+    r"буковин\w*|чернівецьк\w*|львів\w*)\b"
+)
+_UPSTREAM_VIN_KHM_OBLAST_RE = re.compile(
+    r"(?i)\b(вінниччин\w*|вінницьк\w*|хмельниччин\w*|хмельницьк\w*)\b"
+)
+
 
 class MessageNormalizer:
     """Message analyzer that can inherit the target type from the context."""
@@ -290,6 +310,60 @@ class MessageNormalizer:
         cleaned = re.sub(r"[\*_~`!\s]+$", "", line_strip)
         return cleaned.endswith(":")
 
+    @staticmethod
+    def _is_point_compatible_with_region_context(
+        pid: str,
+        alias: str,
+        ref: ReferenceData,
+        active_header_norm: str,
+        line_norm: str,
+    ) -> bool:
+        """Reject cross-oblast homonym matches when the active section header or line specifies another oblast."""
+        ctx_norm = f"{active_header_norm} {line_norm}".strip()
+        has_if_ctx = bool(_IF_REGION_CONTEXT_RE.search(ctx_norm))
+
+        # 1. Ambiguous small-village aliases on Tlumach ("гринівці", "озеряни") have prominent homonyms
+        # in Khmelnytskyi ("Лісові Гринівці") and Ternopil/Volyn/Rivne ("Озеряни").
+        # Only match them when Ivano-Frankivsk / Tlumach / Tysmenytsia context is explicitly present.
+        if pid == "tlumach" and alias.startswith(("гринівц", "озерян")):
+            if not has_if_ctx:
+                return False
+            if (
+                active_header_norm
+                and _NON_IF_OBLAST_RE.search(active_header_norm)
+                and not _IF_REGION_CONTEXT_RE.search(line_norm)
+            ):
+                return False
+
+        # 2. Ambiguous village alias "мартинівка" on Buchach has homonyms in Khmelnytskyi and Vinnytsia oblasts.
+        if (
+            pid == "buchach"
+            and alias.startswith("мартинів")
+            and _UPSTREAM_VIN_KHM_OBLAST_RE.search(ctx_norm)
+            and not re.search(r"(?i)\b(тернопіль\w*|бучач\w*|франків\w*|прикарпат\w*)\b", ctx_norm)
+        ):
+            return False
+
+        point = ref.points.get(pid)
+        if not point:
+            return True
+
+        dist = point.distance_km or 0.0
+        is_reg = bool(getattr(point, "is_regional", False))
+
+        # 3. Ivano-Frankivsk immediate suburbs (<= 10 km, Level 3B, e.g. Микитинці, Вовчинці, Угринів)
+        # must never match under another oblast's header/context unless IF context is explicitly present.
+        if 0.0 < dist <= 10.0 and not is_reg and _NON_IF_OBLAST_RE.search(ctx_norm) and not has_if_ctx:
+            return False
+
+        # 4. When under a Vinnytsia or Khmelnytskyi section header (or explicit line context without Ternopil/IF transition),
+        # points deep inside Ivano-Frankivsk or interior Ternopil oblast (<= 75 km or regional IF points) cannot match.
+        return not (
+            (_UPSTREAM_VIN_KHM_OBLAST_RE.search(active_header_norm) or _UPSTREAM_VIN_KHM_OBLAST_RE.search(line_norm))
+            and not re.search(r"(?i)\b(тернопіль\w*|франків\w*|прикарпат\w*|іф)\b", line_norm)
+            and (is_reg or (0.0 < dist <= 75.0))
+        )
+
     def parse(self, post: RawPost) -> ParsedMessage:
         text = post.text
         norm_text = normalize(text)
@@ -393,9 +467,11 @@ class MessageNormalizer:
             if in_distant_section or has_distant:
                 continue
 
-            # Find corridor points on this specific line
+            # Find corridor points on this specific line, masking compound non-corridor names first
             raw_line_matches: list[tuple[str, str]] = []  # (point_id, matched_alias)
-            line_spans: list[tuple[int, int]] = []
+            line_spans: list[tuple[int, int]] = [
+                m.span() for m in _NON_CORRIDOR_COMPOUND_PLACE_RE.finditer(line_norm)
+            ]
             for alias, pat in alias_patterns:
                 for m in pat.finditer(line_norm):
                     s, e = m.span()
@@ -408,8 +484,13 @@ class MessageNormalizer:
                     if not is_raion_alias and re.match(r"^\s*(?:район\w*|р-н\w*|рн\b)", line_norm[e:]):
                         continue
 
-                    line_spans.append((s, e))
                     pid = alias_index[alias]
+                    if not self._is_point_compatible_with_region_context(
+                        pid, alias, ref, active_corridor_header_norm, line_norm
+                    ):
+                        continue
+
+                    line_spans.append((s, e))
                     raw_line_matches.append((pid, alias))
 
             # If a specific settlement is present on this line, generic raion qualifiers
