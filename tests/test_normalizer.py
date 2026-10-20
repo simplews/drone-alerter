@@ -625,6 +625,44 @@ class TestMessageNormalizer(unittest.TestCase):
         p_vov = RawPost("kudy_letyt", 126002, "Вінниччина:\nРеактивний БпЛА курсом на Вовчинці", t0 + timedelta(minutes=125))
         self.assertEqual(self.normalizer.parse(p_vov).points, [])
 
+    def test_airport_in_other_cities_does_not_trigger_ivano_frankivsk(self):
+        """Regression test for 2026-10-19/20 false Level 3B alerts caused by 'аеропорт' in other cities:
+        - 'Львів: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/125480) -> points=[]
+        - 'Хмельницький: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/125547, 125632) -> points=[]
+        - '‼️Хмельницький - уважно, реактивна герань у бік аеропорту!' (monitoring_zaxid/29047) -> points=[]
+        - 'Хмельницький: Реактивний БпЛА підлітає до аеропорту' (kudy_letyt/125598) -> points=[]
+        - 'Вінниця: Реактивний БпЛА курсом на Немирівський повз аеропорт' (kudy_letyt/123195) -> points=[]
+        - 'Рівне: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/123379) -> points=[]
+        - 'Івано-Франківськ: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/123913) -> points=['ivano_frankivsk']
+        """
+        t0 = datetime(2026, 10, 19, 21, 13, 11, tzinfo=UTC)
+
+        non_if_airport_posts = [
+            (125480, "Львів:\nРеактивний БпЛА курсом на аеропорт"),
+            (125547, "Хмельницький:\nРеактивний БпЛА курсом на аеропорт"),
+            (29047, "‼️Хмельницький - уважно, реактивна герань у бік аеропорту!"),
+            (125598, "Хмельницький:\nРеактивний БпЛА підлітає до аеропорту"),
+            (123195, "Вінниця:\nРеактивний БпЛА курсом на Немирівський повз аеропорт"),
+            (123379, "Рівне:\nРеактивний БпЛА курсом на аеропорт"),
+            (28661, "Рівненщина:\n1 реактивна герань на аеропорт Рівне ‼️"),
+        ]
+        for idx, (mid, text) in enumerate(non_if_airport_posts):
+            p = RawPost("kudy_letyt", mid, text, t0 + timedelta(minutes=idx * 5))
+            res = self.normalizer.parse(p)
+            self.assertEqual(res.points, [], f"Expected no IF points for {text!r}, got {res.points}")
+
+        # Explicit Ivano-Frankivsk airport posts MUST still trigger 'ivano_frankivsk'
+        if_airport_posts = [
+            (123913, "Івано-Франківськ:\nРеактивний БпЛА курсом на аеропорт"),
+            (123927, "Івано-Франківськ:\nРеактивний БпЛА курсом на аеропорт (1км)"),
+            (124068, "Івано-Франківськ: реактивний БпЛА курсом на аеропорт"),
+            (124099, "Реактивний БпЛА на Франківськ (аеропорт)"),
+        ]
+        for idx, (mid, text) in enumerate(if_airport_posts):
+            p = RawPost("kudy_letyt", mid, text, t0 + timedelta(minutes=100 + idx * 5))
+            res = self.normalizer.parse(p)
+            self.assertEqual(res.points, ["ivano_frankivsk"], f"Expected ['ivano_frankivsk'] for {text!r}, got {res.points}")
+
 
 if __name__ == "__main__":
     unittest.main()

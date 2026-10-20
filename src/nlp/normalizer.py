@@ -59,13 +59,19 @@ _IF_NEGATED_RE = re.compile(
     r"(?i)\b(немає|нема|без|не\s+фіксується|не\s+спостерігається)\b|"
     r"не\s+(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку)\s+(?:івано-)?франківськ"
 )
-_IF_AIRPORT_OR_OVER_RE = re.compile(
+_IF_OVER_CITY_RE = re.compile(
     r"(?i)(?:"
-    r"\b(?:курс\w*\s+на|на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку|над|біля|в\s+районі|у\s+районі)\s+аеропорт\w*|"
     r"\bна\s+(?:івано-)?франківськ\s*\(\s*аеропорт\w*\s*\)|"
     r"\b(?:над|в\s+межах|біля|поблизу|на\s+околиц\w+)\s+(?:міста\s+|м\.\s*)?(?:івано-)?франківськ\w*|"
     r"\bпідліта\w*\s+до\s+(?:івано-)?франківськ\w*"
     r")"
+)
+_AIRPORT_RE = re.compile(
+    r"(?i)\b(?:курс\w*\s+на|на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку|"
+    r"підліта\w*\s+до|повз|над|біля|поблизу|в\s+районі|у\s+районі)\s+(?:аеропорт\w*|летовищ\w*)"
+)
+_IF_AIRPORT_CONTEXT_RE = re.compile(
+    r"(?i)\b((?:івано-)?франківськ\w*|франківщин\w*|прикарпат\w*|іф|хриплин\w*|тисмениц\w*|тлумач\w*)\b"
 )
 _IF_DIRECT_COURSE_RE = re.compile(
     r"(?i)(?:"
@@ -144,7 +150,7 @@ _NORTHERN_TRACK_RE = re.compile(
 
 # Approach / western regions relevant to the corridor
 _CORRIDOR_REGION_RE = re.compile(
-    r"(?i)\b(вінниччин|вінницьк|хмельниччин|хмельницьк|тернопіль|франків|прикарпат|буковин|чернівецьк|львів)\w*"
+    r"(?i)\b(вінниччин|вінницьк|вінниц|хмельниччин|хмельницьк|тернопіль|тернопол|франків|прикарпат|буковин|чернівецьк|львів)\w*"
 )
 
 # Multi-word non-corridor settlement names that share a token with a corridor alias
@@ -160,11 +166,11 @@ _IF_REGION_CONTEXT_RE = re.compile(
     r"єзупіл\w*|єзупол\w*|чернелиц\w*|хриплин\w*)\b"
 )
 _NON_IF_OBLAST_RE = re.compile(
-    r"(?i)\b(вінниччин\w*|вінницьк\w*|хмельниччин\w*|хмельницьк\w*|тернопіль\w*|"
+    r"(?i)\b(вінниччин\w*|вінницьк\w*|вінниц\w*|хмельниччин\w*|хмельницьк\w*|тернопіль\w*|тернопол\w*|"
     r"буковин\w*|чернівецьк\w*|львів\w*)\b"
 )
 _UPSTREAM_VIN_KHM_OBLAST_RE = re.compile(
-    r"(?i)\b(вінниччин\w*|вінницьк\w*|хмельниччин\w*|хмельницьк\w*)\b"
+    r"(?i)\b(вінниччин\w*|вінницьк\w*|вінниц\w*|хмельниччин\w*|хмельницьк\w*)\b"
 )
 
 
@@ -202,17 +208,17 @@ class MessageNormalizer:
     @classmethod
     def _extract_divert_destination(cls, line_norm: str, cancel_keywords: list[str]) -> str | None:
         """Extract destination or cardinal direction the target diverted to."""
-        # 1. Check known cancel/divert keywords from profile that start with "на ", "повз ", or "до "
+        # 1. Check known cancel/divert keywords from profile that start with "на ", "повз ", "до ", "в бік ", or "у бік "
         # Sort by length descending to match more specific phrases first (e.g. "на стару синяву" before "на синяву")
         kw_candidates = [
             kw.strip() for kw in cancel_keywords
-            if kw.lower().startswith(("на ", "повз ", "до "))
+            if kw.lower().startswith(("на ", "повз ", "до ", "в бік ", "у бік "))
         ]
         kw_candidates.sort(key=len, reverse=True)
         for kw in kw_candidates:
             if re.search(rf"(?i)\b{re.escape(kw)}\b", line_norm):
-                # Clean prefix "на ", "повз ", or "до "
-                dest = re.sub(r"^(?:на|повз|до)\s+", "", kw, flags=re.IGNORECASE).strip()
+                # Clean prefix "на ", "повз ", "до ", "в бік ", or "у бік "
+                dest = re.sub(r"^(?:на|повз|до|в\s+бік|у\s+бік)\s+", "", kw, flags=re.IGNORECASE).strip()
                 if dest:
                     return cls._normalize_divert_dest(dest)
 
@@ -301,7 +307,9 @@ class MessageNormalizer:
         return any(
             bool(re.search(rf"(?i)\b{re.escape(kw.lower())}\b", line_norm))
             for kw in cancel_keywords
-            if kw.lower().startswith(("на ", "повз ", "до ")) or "відверн" in kw.lower() or "курс" in kw.lower()
+            if kw.lower().startswith(("на ", "повз ", "до ", "в бік ", "у бік "))
+            or "відверн" in kw.lower()
+            or "курс" in kw.lower()
         )
 
     @staticmethod
@@ -527,7 +535,16 @@ class MessageNormalizer:
 
             # Check direct Ivano-Frankivsk contextual threat / course on this line
             has_if_negation = bool(_IF_NEGATED_RE.search(line_norm))
-            has_if_airport_or_over = (not has_if_negation) and bool(_IF_AIRPORT_OR_OVER_RE.search(line_norm))
+            line_context_norm = f"{active_corridor_header_norm} {line_norm}".strip()
+            has_if_airport = bool(
+                _AIRPORT_RE.search(line_norm)
+                and _IF_AIRPORT_CONTEXT_RE.search(line_context_norm)
+                and not _NON_IF_OBLAST_RE.search(line_norm)
+                and (not _NON_IF_OBLAST_RE.search(active_corridor_header_norm) or _IF_AIRPORT_CONTEXT_RE.search(line_norm))
+            )
+            has_if_airport_or_over = (not has_if_negation) and (
+                bool(_IF_OVER_CITY_RE.search(line_norm)) or has_if_airport
+            )
             has_if_direct_course = (not has_if_negation) and bool(_IF_DIRECT_COURSE_RE.search(line_norm))
             has_if_threat_warning = (not has_if_negation) and bool(_IF_THREAT_WARNING_RE.search(line_norm))
 
