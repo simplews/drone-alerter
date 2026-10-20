@@ -968,6 +968,48 @@ class TestTargetTracker(unittest.TestCase):
         self.assertIn("kelmentsi", active)
         self.assertIn("vendychany", active["kelmentsi"].points_sequence)
 
+    def test_khmelnytskyi_airport_does_not_hijack_buchach_target(self):
+        """Regression test for 2026-10-20T00:20Z:
+        A target tracked at Buchach (125541, 29041) must NOT be escalated to Level 3B Ivano-Frankivsk
+        when Khmelnytskyi airport posts arrive (kudy_letyt/125547, monitoring_zaxid/29047).
+        Also verifies Rohatyn -> Khodoriv/Lvivshchyna diversion (kudy_letyt/125607, kpszsu/88620).
+        """
+        t0 = datetime(2026, 10, 20, 0, 11, 25, tzinfo=UTC)
+        p_buch = RawPost("kudy_letyt", 125541, "Тернопільщина:\nРеактивний БпЛА курсом на Бучач", t0)
+        alerts_buch = self.tracker.process_message(p_buch, self.normalizer.parse(p_buch), now=t0)
+        self.assertEqual(len(alerts_buch), 1)
+        self.assertEqual(alerts_buch[0].level, AlertLevel.LEVEL_2)
+
+        t1 = t0 + timedelta(minutes=8, seconds=42)
+        p_khm1 = RawPost("kudy_letyt", 125547, "Хмельницький:\nРеактивний БпЛА курсом на аеропорт", t1)
+        alerts_khm1 = self.tracker.process_message(p_khm1, self.normalizer.parse(p_khm1), now=t1)
+        self.assertEqual(alerts_khm1, [])
+
+        t2 = t1 + timedelta(seconds=31)
+        p_khm2 = RawPost("monitoring_zaxid", 29047, "‼️Хмельницький - уважно, реактивна герань у бік аеропорту!", t2)
+        alerts_khm2 = self.tracker.process_message(p_khm2, self.normalizer.parse(p_khm2), now=t2)
+        self.assertEqual(alerts_khm2, [])
+
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].last_point_id, "buchach")
+
+        # Rohatyn -> Khodoriv / Lvivshchyna diversion sequence (T-202610200239-ca7b)
+        t_roh = datetime(2026, 10, 20, 2, 43, 26, tzinfo=UTC)
+        p_roh = RawPost("kudy_letyt", 125606, "Франківщина:\nРеактивний БпЛА курсом на Рогатин з Тернопіщини", t_roh)
+        self.tracker.process_message(p_roh, self.normalizer.parse(p_roh), now=t_roh)
+        roh_targets = [t for t in self.tracker.get_active_targets() if t.last_point_id == "rohatyn"]
+        self.assertEqual(len(roh_targets), 1)
+
+        t_khod = t_roh + timedelta(minutes=3, seconds=39)
+        p_khod = RawPost("kudy_letyt", 125607, "Продовжує рух в бік Ходорів (Львівщина)", t_khod)
+        parsed_khod = self.normalizer.parse(p_khod)
+        self.assertEqual(parsed_khod.action, ActionType.DIVERTED)
+        alerts_khod = self.tracker.process_message(p_khod, parsed_khod, now=t_khod)
+        self.assertEqual(len(alerts_khod), 1)
+        self.assertEqual(alerts_khod[0].title, "Ціль змінила курс")
+        self.assertIn("Ходорів", alerts_khod[0].body)
+
 
 if __name__ == "__main__":
     unittest.main()
