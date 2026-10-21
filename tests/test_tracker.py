@@ -774,14 +774,23 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alerts_cher[0].level, AlertLevel.LEVEL_3A)
         self.assertIn("(КР Х-101)", alerts_cher[0].title)
 
-        # 4. Regional cruise missile alert (e.g. Kalibr on Burshtyn) is non-silent and uses missile phrasing
+        # 4. Regional cruise missile alert (e.g. Kalibr on Kalush) is non-silent and uses missile phrasing
         t3 = t2 + timedelta(minutes=1)
-        p_kalibr = RawPost("monitoring_zaxid", 5004, "2х Калібри курсом на Бурштин!", t3)
-        alerts_bur = self.tracker.process_message(p_kalibr, self.normalizer.parse(p_kalibr), now=t3)
+        p_kalibr = RawPost("monitoring_zaxid", 5004, "2х Калібри курсом на Калуш!", t3)
+        alerts_kal = self.tracker.process_message(p_kalibr, self.normalizer.parse(p_kalibr), now=t3)
+        self.assertEqual(len(alerts_kal), 1)
+        self.assertEqual(alerts_kal[0].level, AlertLevel.REGIONAL)
+        self.assertFalse(alerts_kal[0].is_silent)
+        self.assertIn("🚀 Зафіксовано рух крилатої ракети (КР Калібр)", alerts_kal[0].body)
+
+        # 5. Burshtyn is classified as Level 2 approach alert
+        t4 = t3 + timedelta(minutes=1)
+        p_burshtyn = RawPost("monitoring_zaxid", 5005, "Реактивна герань курсом на Бурштин!", t4)
+        alerts_bur = self.tracker.process_message(p_burshtyn, self.normalizer.parse(p_burshtyn), now=t4)
         self.assertEqual(len(alerts_bur), 1)
-        self.assertEqual(alerts_bur[0].level, AlertLevel.REGIONAL)
+        self.assertEqual(alerts_bur[0].level, AlertLevel.LEVEL_2)
+        self.assertIn("Бурштин", alerts_bur[0].title)
         self.assertFalse(alerts_bur[0].is_silent)
-        self.assertIn("🚀 Зафіксовано рух крилатої ракети (КР Калібр)", alerts_bur[0].body)
 
     def test_missile_corridor_level1_to_if_escalation(self):
         """Cruise missiles heading toward Khmelnytskyi, Ternopil, or Lviv must create Level 1 targets
