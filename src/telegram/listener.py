@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient, errors, events
 from telethon.sessions import StringSession
 
 from src.engine.models import RawPost
@@ -55,7 +55,19 @@ class TelegramChannelListener:
         session = StringSession(self.session_str) if self.session_str else StringSession("")
         self.client = TelegramClient(session, self.api_id, self.api_hash)
 
-        await self.client.connect()
+        try:
+            await self.client.connect()
+        except errors.AuthKeyDuplicatedError:
+            logger.critical(
+                "❌ Помилка Telethon AuthKeyDuplicatedError: сесія була використана з двох різних IP-адрес одночасно "
+                "і анульована Telegram. Потрібно згенерувати нову сесію: python -m src.telegram.generate_session "
+                "і оновити TELETHON_STRING_SESSION в .env."
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Помилка підключення до Telegram MTProto: {exc}")
+            return
+
         if not await self.client.is_user_authorized():
             logger.error(
                 "Клієнт Telethon не авторизований! Для роботи без вводу коду збережіть "
@@ -101,17 +113,32 @@ class TelegramChannelListener:
             logger.exception("Помилка при обробці події Telegram")
 
     async def _heartbeat_loop(self) -> None:
-        """Check the socket liveness every 30 seconds."""
+        """Check the socket liveness every 30 seconds and reconnect if dropped."""
         was_connected = True
         while self._is_running:
             try:
                 await asyncio.sleep(30)
                 connected = self.is_connected()
-                if not connected and was_connected:
-                    was_connected = False
-                    logger.warning("Втрачено з'єднання з Telegram MTProto!")
-                    if self.on_connection_lost:
-                        await self.on_connection_lost()
+                if not connected:
+                    if was_connected:
+                        was_connected = False
+                        logger.warning("Втрачено з'єднання з Telegram MTProto!")
+                        if self.on_connection_lost:
+                            await self.on_connection_lost()
+
+                    # Attempt reconnection
+                    try:
+                        logger.info("Спроба відновити з'єднання з Telegram MTProto...")
+                        if self.client:
+                            await self.client.connect()
+                            if await self.client.is_user_authorized():
+                                was_connected = True
+                                logger.info("З'єднання з Telegram MTProto успішно відновлено.")
+                                if self.on_connection_restored:
+                                    await self.on_connection_restored()
+                    except Exception as conn_err:  # noqa: BLE001
+                        logger.warning(f"Не вдалося відновити з'єднання з Telegram: {conn_err}")
+
                 elif connected and not was_connected:
                     was_connected = True
                     logger.info("З'єднання з Telegram MTProto відновлено.")

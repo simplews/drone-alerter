@@ -88,8 +88,15 @@ def build_candidate(active: ReferenceData, observations: list[ArrivalObservation
             log.append(f"Новий пункт з профілю {pid} (рівень {sp.level})")
         else:
             cp = cand.points[pid]
+            if cp.level != sp.level:
+                log.append(f"Рівень пункту {pid}: {cp.level} -> {sp.level}")
+                cp.level = sp.level
             if cp.distance_km is None and sp.distance_km is not None:
                 cp.distance_km = sp.distance_km
+            if (cp.eta_min is None or cp.is_regional != sp.is_regional) and sp.eta_min is not None:
+                cp.eta_min = sp.eta_min
+                cp.eta_max = sp.eta_max
+                cp.eta_method = "prior"
             cp.is_regional = sp.is_regional
             cp.is_contextual = sp.is_contextual
             cp.name_gen = sp.name_gen
