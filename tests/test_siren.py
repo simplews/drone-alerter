@@ -80,6 +80,32 @@ class TestAerialAlertService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_count, 2)
         await client.aclose()
 
+    async def test_fetch_state_non_dict_fallback(self):
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if request.url == "https://primary.example.com/alerts":
+                return httpx.Response(200, json=[])  # Returned list instead of dict
+            return httpx.Response(200, json={"states": {"Івано-Франківська область": {"alertnow": True}}})
+
+        transport = httpx.MockTransport(handler)
+        client = httpx.AsyncClient(transport=transport)
+
+        service = AerialAlertService(
+            region="Івано-Франківська область",
+            sources=["https://primary.example.com/alerts", "https://backup.example.com/alerts"],
+            http_client=client,
+        )
+
+        state = await service.fetch_state()
+        self.assertIsNotNone(state)
+        self.assertTrue(state.is_active)
+        self.assertEqual(state.source_url, "https://backup.example.com/alerts")
+        self.assertEqual(call_count, 2)
+        await client.aclose()
+
     async def test_fetch_state_all_fail_returns_none(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(502, text="Bad Gateway")

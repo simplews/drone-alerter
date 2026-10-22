@@ -91,6 +91,9 @@ class AerialAlertService:
                         continue
 
                     data = resp.json()
+                    if not isinstance(data, dict):
+                        logger.warning(f"Невірний формат JSON у {source_url}: очікувався dict, отримано {type(data).__name__}")
+                        continue
                     states = data.get("states")
                     if not isinstance(states, dict):
                         logger.warning(f"Невірний формат JSON у {source_url}: відсутнє поле 'states'")
