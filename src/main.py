@@ -106,6 +106,8 @@ class Application:
                 on_post=self.on_telegram_post,
                 on_connection_lost=self.on_connection_lost,
                 on_connection_restored=self.on_connection_restored,
+                is_outage=lambda: self.subscriber_repo.get_state("listener_outage") == "1",
+                set_outage=lambda val: self.subscriber_repo.set_state("listener_outage", "1" if val else "0"),
             )
         else:
             logger.warning("TELETHON_API_ID / HASH не задано. Читання каналів вимкнено.")
