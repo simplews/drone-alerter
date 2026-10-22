@@ -34,6 +34,12 @@ class SubscriberRepository:
                     receive_level_1 INTEGER DEFAULT 1
                 )
             """)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS system_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            """)
 
     def add(self, chat_id: int) -> None:
         now = datetime.now(UTC).isoformat()
@@ -53,6 +59,21 @@ class SubscriberRepository:
 
     def count(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+
+    def get_state(self, key: str, default: str | None = None) -> str | None:
+        row = self.conn.execute("SELECT value FROM system_state WHERE key = ?", (key,)).fetchone()
+        if row is not None:
+            return row["value"]
+        if key == "listener_outage" and self.count() > 0:
+            return "1"
+        return default
+
+    def set_state(self, key: str, value: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO system_state(key, value) VALUES (?, ?)",
+                (key, value),
+            )
 
 
 def create_bot_dispatcher(
