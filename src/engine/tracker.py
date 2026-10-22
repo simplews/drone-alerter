@@ -799,13 +799,14 @@ class TargetTracker:
                         source_links.append((ch, f"https://t.me/{ch}/{mid}"))
 
                 body = (
-                    "⚪️ Нових повідомлень про цю ціль немає: вона могла змінити курс, бути втраченою локаційно або знищеною. "
-                    "Це не означає, що загрози немає — слідкуйте за офіційними повідомленнями."
+                    "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
+                    "Імовірно, змінила курс або втрачена, однак загроза може повторитися. "
+                    "Слідкуйте за офіційними повідомленнями."
                 )
                 alerts.append(AlertEvent(
                     target_id=target.id,
                     level=AlertLevel.INFO,
-                    title="Ціль локаційно втрачена",
+                    title="Ціль змінила курс / втрачена",
                     body=body,
                     is_silent=True,
                     source_links=source_links,
@@ -849,11 +850,11 @@ class TargetTracker:
                 ))
                 continue
 
-            # Case 3: Level 3A target whose ETA window expired without reaching Level 3B
+            # Case 3: Level 3A or Level 3B target whose ETA window expired
             if (
-                target.level == AlertLevel.LEVEL_3A
+                target.level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B)
                 and target.eta_window_end_utc
-                and now > (target.eta_window_end_utc + timedelta(minutes=5))
+                and now > (target.eta_window_end_utc + timedelta(minutes=4))
             ):
                 target.status = TargetStatus.LOST
                 if self._store:
@@ -861,20 +862,29 @@ class TargetTracker:
                         self._store.label_target(
                             target.id,
                             OUTCOME_UNKNOWN,
-                            notes="ETA expired at Level 3A without reaching Level 3B",
+                            notes=f"ETA expired at {target.level.value}",
                         )
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
-                continue
 
-            # Case 4: Level 3B target whose ETA window expired (drone is directly at or over the city).
-            # 4 minutes after ETA window end, the drone has already reached or been engaged.
-            if (
-                target.level == AlertLevel.LEVEL_3B
-                and target.eta_window_end_utc
-                and now > (target.eta_window_end_utc + timedelta(minutes=4))
-            ):
-                target.status = TargetStatus.EXPIRED
+                source_links: list[tuple[str, str]] = []
+                if target.message_ids:
+                    for ch, mid in target.message_ids[-2:]:
+                        source_links.append((ch, f"https://t.me/{ch}/{mid}"))
+
+                body = (
+                    "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
+                    "Імовірно, змінила курс, впала або була збита, однак загроза може повторитися. "
+                    "Слідкуйте за офіційними повідомленнями."
+                )
+                alerts.append(AlertEvent(
+                    target_id=target.id,
+                    level=AlertLevel.INFO,
+                    title="Ціль змінила курс / втрачена / знищена",
+                    body=body,
+                    is_silent=True,
+                    source_links=source_links,
+                ))
                 continue
 
             # Case 5: General cleanup for targets older than 45 minutes

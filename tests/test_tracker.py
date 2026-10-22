@@ -213,9 +213,9 @@ class TestTargetTracker(unittest.TestCase):
         after_end = target.eta_window_end_utc + timedelta(seconds=10)
         timeout_alerts = tracker.check_timeouts(now=after_end)
         self.assertEqual(len(timeout_alerts), 1)
-        self.assertEqual(timeout_alerts[0].title, "Ціль локаційно втрачена")
-        self.assertIn("бути втраченою локаційно або знищеною", timeout_alerts[0].body)
-        self.assertIn("Це не означає, що загрози немає", timeout_alerts[0].body)
+        self.assertEqual(timeout_alerts[0].title, "Ціль змінила курс / втрачена")
+        self.assertIn("Імовірно, змінила курс або втрачена", timeout_alerts[0].body)
+        self.assertIn("однак загроза може повторитися", timeout_alerts[0].body)
         self.assertEqual(target.status, TargetStatus.LOST)
         self.assertEqual(len(tracker.get_active_targets()), 0)
 
@@ -439,11 +439,17 @@ class TestTargetTracker(unittest.TestCase):
         p_div = RawPost("kudy_letyt", 405, "Хмельниччина:\nРеактивний БпЛА повз Дунаївці курсом на Городок", t_div)
         alerts_div = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_div)
 
-        self.assertEqual(len(alerts_div), 1)
-        self.assertEqual(alerts_div[0].title, "Ціль змінила курс")
-        self.assertIn("Дунаївці", alerts_div[0].body)
-        self.assertIn("Городок", alerts_div[0].body)
-        self.assertNotIn("Тисмениця", alerts_div[0].body)
+        div_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс"]
+        self.assertEqual(len(div_alerts), 1)
+        self.assertEqual(div_alerts[0].title, "Ціль змінила курс")
+        self.assertIn("Дунаївці", div_alerts[0].body)
+        self.assertIn("Городок", div_alerts[0].body)
+        self.assertNotIn("Тисмениця", div_alerts[0].body)
+
+        # Target 1 (Tysmenytsia) ETA expired by 15:24, so it emitted a timeout alert
+        t1_timeout_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс / втрачена / знищена"]
+        self.assertEqual(len(t1_timeout_alerts), 1)
+        self.assertIn("впала або була збита", t1_timeout_alerts[0].body)
 
     def test_conventional_shahed_eta_and_title(self):
         # Conventional Shahed reported at Nova Ushytsia (187 km)

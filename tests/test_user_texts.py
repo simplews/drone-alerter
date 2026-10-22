@@ -137,7 +137,8 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         timeout_time1 = target1.eta_window_end_utc + timedelta(seconds=10)
         alerts1 = tracker1.check_timeouts(now=timeout_time1)
         self.assertEqual(len(alerts1), 1)
-        self.assertIn("не означає, що загрози немає", alerts1[0].body)
+        self.assertEqual(alerts1[0].title, "Ціль змінила курс / втрачена")
+        self.assertIn("однак загроза може повторитися", alerts1[0].body)
 
         # Level 2 target timeout
         tracker2 = TargetTracker(self.cache)
@@ -147,7 +148,20 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         timeout_time2 = target2.eta_window_end_utc + timedelta(minutes=5)
         alerts2 = tracker2.check_timeouts(now=timeout_time2)
         self.assertEqual(len(alerts2), 1)
+        self.assertEqual(alerts2[0].title, "Ціль змінила курс / втрачена")
         self.assertIn("однак загроза може повторитися", alerts2[0].body)
+
+        # Level 3 target timeout (Level 3A / 3B)
+        tracker3 = TargetTracker(self.cache)
+        p3 = RawPost("chan_a", 3, "Реактивна герань на Тлумач", T0)
+        tracker3.process_message(p3, self.normalizer.parse(p3), now=T0)
+        target3 = tracker3.get_active_targets()[0]
+        timeout_time3 = target3.eta_window_end_utc + timedelta(minutes=5)
+        alerts3 = tracker3.check_timeouts(now=timeout_time3)
+        self.assertEqual(len(alerts3), 1)
+        self.assertEqual(alerts3[0].title, "Ціль змінила курс / втрачена / знищена")
+        self.assertIn("впала або була збита", alerts3[0].body)
+        self.assertIn("однак загроза може повторитися", alerts3[0].body)
 
     def test_regional_alert_does_not_claim_100_percent(self):
         """Verify regional alert does not contain false certainty '100%'."""
