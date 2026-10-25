@@ -366,11 +366,15 @@ class MessageNormalizer:
 
         # 4. When under a Vinnytsia or Khmelnytskyi section header (or explicit line context without Ternopil/IF transition),
         # points deep inside Ivano-Frankivsk or interior Ternopil oblast (<= 75 km or regional IF points) cannot match.
-        return not (
+        if (
             (_UPSTREAM_VIN_KHM_OBLAST_RE.search(active_header_norm) or _UPSTREAM_VIN_KHM_OBLAST_RE.search(line_norm))
             and not re.search(r"(?i)\b(тернопіль\w*|франків\w*|прикарпат\w*|іф)\b", line_norm)
             and (is_reg or (0.0 < dist <= 75.0))
-        )
+        ):
+            return False
+
+        # 5. Guard against homonyms for Dolyna (Lypova Dolyna in Sumy, Dolynska in Kirovohrad)
+        return not (pid == "dolyna" and bool(re.search(r"(?i)\b(липов\w+\s+долин\w*|долинськ\w*)\b", line_norm)))
 
     def parse(self, post: RawPost) -> ParsedMessage:
         text = post.text
