@@ -194,7 +194,15 @@ def retrain(store: LearningStore, repo: ReferenceRepository, cfg: LearningConfig
         for a in aliases for form in [a.phrase_norm, *a.surface_forms]
     )
     new_labels = store.count_labeled() != active.metrics.get("n_labeled_targets", -1)
-    if not new_labels and not new_aliases:
+    from .reference import seed_from_profile
+    seed_ref = seed_from_profile()
+    profile_changed = (
+        seed_ref.points.keys() != active.points.keys()
+        or any(seed_ref.points[pid].level != active.points[pid].level or seed_ref.points[pid].names != active.points[pid].names for pid in seed_ref.points if pid in active.points)
+        or seed_ref.cancel_keywords != active.cancel_keywords
+        or seed_ref.target_keywords != active.target_keywords
+    )
+    if not new_labels and not new_aliases and not profile_changed:
         return RetrainReport("skipped", "Нових розмічених цілей і схвалених назв немає")
 
     candidate = build_candidate(active, observations, outcomes, aliases, cfg.calibration)

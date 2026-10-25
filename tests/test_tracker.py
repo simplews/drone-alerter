@@ -1025,6 +1025,41 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alerts_khod[0].title, "Ціль змінила курс")
         self.assertIn("Ходорів", alerts_khod[0].body)
 
+    def test_chortkiv_and_zalishchyky_corridor_progression(self):
+        """Chortkiv (~82 km) and Zalishchyky (~81 km) trigger Level 2 approach alerts,
+        and subsequent Stryi diversion generates an accurate course change alert.
+        """
+        t0 = datetime(2026, 10, 21, 18, 5, 0, tzinfo=UTC)
+
+        # 1. Chortkiv
+        p_chort = RawPost("kudy_letyt", 126201, "Тернопільщина:\nРеактивний БпЛА курсом на Чортків", t0)
+        alerts_chort = self.tracker.process_message(p_chort, self.normalizer.parse(p_chort), now=t0)
+        self.assertEqual(len(alerts_chort), 1)
+        self.assertEqual(alerts_chort[0].level, AlertLevel.LEVEL_2)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "chortkiv")
+
+        # 2. Progression to Buchach
+        t1 = t0 + timedelta(minutes=4)
+        p_buch = RawPost("monitoring_zaxid", 29510, "Тернопільська область:\n1 реактивна герань на Бучач", t1)
+        alerts_buch = self.tracker.process_message(p_buch, self.normalizer.parse(p_buch), now=t1)
+        self.assertEqual(len(alerts_buch), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "buchach")
+
+        # 3. Progression to Burshtyn
+        t2 = t1 + timedelta(minutes=6)
+        p_bur = RawPost("kudy_letyt", 126205, "Франківщина:\nРеактивний БпЛА курсом на Бурштин", t2)
+        alerts_bur = self.tracker.process_message(p_bur, self.normalizer.parse(p_bur), now=t2)
+        self.assertEqual(len(alerts_bur), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "burshtyn")
+
+        # 4. Diversion towards Stryi
+        t3 = t2 + timedelta(minutes=4)
+        p_stryi = RawPost("kudy_letyt", 126210, "Львівщина:\nРеактивний БпЛА курсом на Стрий povz Войнилів", t3)
+        alerts_stryi = self.tracker.process_message(p_stryi, self.normalizer.parse(p_stryi), now=t3)
+        self.assertEqual(len(alerts_stryi), 1)
+        self.assertEqual(alerts_stryi[0].title, "Ціль змінила курс")
+        self.assertIn("Стрий", alerts_stryi[0].body)
+
 
 if __name__ == "__main__":
     unittest.main()

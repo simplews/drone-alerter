@@ -382,7 +382,7 @@ class TestMessageNormalizer(unittest.TestCase):
         )
         res_28309 = self.normalizer.parse(p_28309)
         self.assertTrue(res_28309.is_jet)
-        self.assertEqual(res_28309.points, ["buchach"])
+        self.assertEqual(res_28309.points, ["chortkiv", "buchach"])
         self.assertEqual(res_28309.action, ActionType.NONE)
 
         p_28310 = RawPost(
@@ -662,6 +662,54 @@ class TestMessageNormalizer(unittest.TestCase):
             p = RawPost("kudy_letyt", mid, text, t0 + timedelta(minutes=100 + idx * 5))
             res = self.normalizer.parse(p)
             self.assertEqual(res.points, ["ivano_frankivsk"], f"Expected ['ivano_frankivsk'] for {text!r}, got {res.points}")
+
+    def test_new_corridor_and_regional_points(self):
+        t0 = datetime(2026, 10, 21, 15, 0, 0, tzinfo=UTC)
+
+        # Chortkiv
+        p_chort = RawPost("kudy_letyt", 126101, "Тернопільщина:\nРеактивний БпЛА курсом на Чортків", t0)
+        res_chort = self.normalizer.parse(p_chort)
+        self.assertTrue(res_chort.is_jet)
+        self.assertEqual(res_chort.points, ["chortkiv"])
+        self.assertEqual(res_chort.action, ActionType.NONE)
+
+        # Zalishchyky
+        p_zal = RawPost("monitoring_zaxid", 29501, "Тернопільщина:\n1 реактивна герань на Заліщики", t0)
+        res_zal = self.normalizer.parse(p_zal)
+        self.assertTrue(res_zal.is_jet)
+        self.assertEqual(res_zal.points, ["zalishchyky"])
+        self.assertEqual(res_zal.action, ActionType.NONE)
+
+        # Regional IF points: Nadvirna, Sniatyn, Voinyliv
+        p_nad = RawPost("monitoring_zaxid", 29502, "Івано-Франківщина:\nРеактивний БпЛА курсом на Надвірну", t0)
+        res_nad = self.normalizer.parse(p_nad)
+        self.assertEqual(res_nad.points, ["nadvirna"])
+
+        p_sn = RawPost("kudy_letyt", 126102, "Франківщина:\nРеактивний БпЛА курсом на Снятин", t0)
+        res_sn = self.normalizer.parse(p_sn)
+        self.assertEqual(res_sn.points, ["sniatyn"])
+
+        p_voin = RawPost("kudy_letyt", 126103, "Франківщина:\nРеактивний БпЛА курсом на Войнилів", t0)
+        res_voin = self.normalizer.parse(p_voin)
+        self.assertEqual(res_voin.points, ["voinyliv"])
+
+        # Dolyna in IF
+        p_dol = RawPost("kudy_letyt", 126104, "Франківщина:\nРеактивний БпЛА курсом на Долину", t0)
+        res_dol = self.normalizer.parse(p_dol)
+        self.assertEqual(res_dol.points, ["dolyna"])
+
+        # Dolyna homonym guards: Lypova Dolyna (Sumy) & Dolynska (Kirovohrad) must NOT match dolyna
+        p_lyp = RawPost("kudy_letyt", 126105, "Сумщина:\nРеактивний БпЛА курсом на Липову Долину", t0)
+        self.assertEqual(self.normalizer.parse(p_lyp).points, [])
+
+        p_dols = RawPost("kudy_letyt", 126106, "Кіровоградщина:\nРеактивний БпЛА курсом на Долинську", t0)
+        self.assertEqual(self.normalizer.parse(p_dols).points, [])
+
+        # Stryi diversion
+        p_stryi = RawPost("kudy_letyt", 126107, "Львівщина:\nРеактивний БпЛА курсом на Стрий povz Войнилів", t0)
+        res_stryi = self.normalizer.parse(p_stryi)
+        self.assertEqual(res_stryi.action, ActionType.DIVERTED)
+        self.assertIn("Стрий", res_stryi.divert_destinations)
 
 
 if __name__ == "__main__":
