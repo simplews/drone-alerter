@@ -93,7 +93,13 @@ def create_bot_dispatcher(
     from src.config import settings
     f_chat_id = feedback_chat_id if feedback_chat_id is not None else settings.feedback_chat_id
     f_admin_ids = feedback_admin_ids if feedback_admin_ids is not None else settings.feedback_admin_ids
-    register_feedback_handlers(dp, feedback_repo, feedback_chat_id=f_chat_id, admin_ids=f_admin_ids)
+    register_feedback_handlers(
+        dp,
+        feedback_repo,
+        feedback_chat_id=f_chat_id,
+        admin_ids=f_admin_ids,
+        subscribers=subscribers,
+    )
 
     def get_levels_text() -> str:
         texts = get_profile().texts

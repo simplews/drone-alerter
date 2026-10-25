@@ -124,6 +124,7 @@ def register_feedback_handlers(
     repo: FeedbackRepository,
     feedback_chat_id: int | None = None,
     admin_ids: list[int] | None = None,
+    subscribers=None,
 ) -> None:
     """Register /feedback, /cancel and admin response handlers on Dispatcher."""
     admin_ids_set = set(admin_ids or [])
@@ -257,8 +258,85 @@ def register_feedback_handlers(
             await state.clear()
 
     if feedback_chat_id:
+        @dp.message(Command("broadcast", "announce"), F.chat.id == feedback_chat_id)
+        async def cmd_broadcast_to_subscribers(message: Message, bot: Bot):
+            # 1. Verify admin permission if admin_ids is specified
+            if admin_ids_set and message.from_user and message.from_user.id not in admin_ids_set:
+                logger.warning(
+                    "Користувач %s не має прав для запуску розсилки (не в FEEDBACK_ADMIN_IDS)",
+                    message.from_user.id,
+                )
+                return
+
+            # 2. Extract text and optional photo
+            command_args = ""
+            if message.text:
+                parts = message.text.split(maxsplit=1)
+                if len(parts) > 1:
+                    command_args = parts[1].strip()
+
+            photo_id = None
+            broadcast_text = command_args
+
+            # If sent as a reply to another message in the group
+            if not broadcast_text and message.reply_to_message:
+                replied = message.reply_to_message
+                if replied.photo:
+                    photo_id = replied.photo[-1].file_id
+                    broadcast_text = replied.caption or ""
+                else:
+                    broadcast_text = replied.text or ""
+
+            if not broadcast_text and not photo_id:
+                help_msg = (
+                    "📢 <b>Команда розсилки всім підписникам</b>\n\n"
+                    "<b>Використання:</b>\n"
+                    "1) <code>/broadcast &lt;текст повідомлення&gt;</code>\n"
+                    "2) Або надішліть повідомлення (текст або фото) у цей чат і зробіть на нього <b>Reply</b> командою <code>/broadcast</code>.\n\n"
+                    "<i>Підтримується HTML-розмітка (<b>жирний</b>, <i>курсив</i>, <code>код</code>).</i>"
+                )
+                await message.reply(help_msg, parse_mode="HTML")
+                return
+
+            sub_repo = subscribers
+            if sub_repo is None:
+                from src.config import settings
+                from src.telegram.bot import SubscriberRepository
+                sub_repo = SubscriberRepository(settings.subscribers_db_path)
+
+            total_subs = sub_repo.count()
+            if total_subs == 0:
+                await message.reply("⚠️ Немає зареєстрованих підписників для відправки.")
+                return
+
+            status_msg = await message.reply(
+                f"📢 <b>Розпочато розсилку для {total_subs} підписників...</b>",
+                parse_mode="HTML",
+            )
+
+            from src.telegram.broadcast_update import broadcast_to_subscribers
+            success, failed = await broadcast_to_subscribers(
+                text=broadcast_text,
+                bot=bot,
+                subscribers=sub_repo,
+                photo_file_id=photo_id,
+                parse_mode="HTML",
+                throttle_delay=0.05,
+            )
+
+            await status_msg.edit_text(
+                f"✅ <b>Розсилку завершено!</b>\n"
+                f"• Успішно доставлено: <b>{success}</b>\n"
+                f"• Помилок: <b>{failed}</b>\n"
+                f"• Всього підписників: <b>{total_subs}</b>",
+                parse_mode="HTML",
+            )
+
         @dp.message(F.chat.id == feedback_chat_id, F.reply_to_message)
         async def handle_admin_reply(message: Message, bot: Bot):
+            # Do not process slash commands as ticket replies
+            if message.text and message.text.startswith("/"):
+                return
             # Verify admin permission if admin_ids is specified
             if admin_ids_set and message.from_user and message.from_user.id not in admin_ids_set:
                 logger.warning(
