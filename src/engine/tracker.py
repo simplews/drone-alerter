@@ -469,6 +469,7 @@ class TargetTracker:
                     alert = self._build_alert(target, calc_point, w_str, post=post, is_update=effective_is_update)
                     pending_alerts_by_target[target.id] = alert
                     if should_alert:
+                        target.alerted = True
                         self._target_last_alerted_level[target.id] = target.level
 
         alerts.extend(pending_alerts_by_target.values())
@@ -559,6 +560,17 @@ class TargetTracker:
                         break
 
         if target is None:
+            return alerts
+
+        if not target.alerted:
+            logger.info("Пропуск сповіщення про дію: ціль %s не була анонсована підписникам", target.id)
+            if parsed.action in (ActionType.DOWNED, ActionType.LOST):
+                if target.target_count > 1:
+                    target.target_count -= 1
+                else:
+                    target.status = TargetStatus.PROBABLY_DOWNED
+            elif parsed.action == ActionType.DIVERTED:
+                target.status = TargetStatus.DIVERTED
             return alerts
 
         if (post.channel, post.message_id) not in target.message_ids:
@@ -793,6 +805,10 @@ class TargetTracker:
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
 
+                if not target.alerted:
+                    logger.debug("Пропуск сповіщення про таймаут: ціль %s не була анонсована підписникам", target.id)
+                    continue
+
                 source_links: list[tuple[str, str]] = []
                 if target.message_ids:
                     for ch, mid in target.message_ids[-2:]:
@@ -830,6 +846,10 @@ class TargetTracker:
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
 
+                if not target.alerted:
+                    logger.debug("Пропуск сповіщення про таймаут: ціль %s не була анонсована підписникам", target.id)
+                    continue
+
                 source_links: list[tuple[str, str]] = []
                 if target.message_ids:
                     for ch, mid in target.message_ids[-2:]:
@@ -866,6 +886,10 @@ class TargetTracker:
                         )
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Не вдалося автоматично розмітити ціль %s: %s", target.id, exc)
+
+                if not target.alerted:
+                    logger.debug("Пропуск сповіщення про таймаут: ціль %s не була анонсована підписникам", target.id)
+                    continue
 
                 source_links: list[tuple[str, str]] = []
                 if target.message_ids:

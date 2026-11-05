@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -40,6 +40,15 @@ class SubscriberRepository:
                     value TEXT NOT NULL
                 )
             """)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS target_chat_messages (
+                    target_id TEXT NOT NULL,
+                    chat_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    updated_at_utc TEXT NOT NULL,
+                    PRIMARY KEY (target_id, chat_id)
+                )
+            """)
 
     def add(self, chat_id: int) -> None:
         now = datetime.now(UTC).isoformat()
@@ -52,6 +61,7 @@ class SubscriberRepository:
     def remove(self, chat_id: int) -> None:
         with self.conn:
             self.conn.execute("DELETE FROM subscribers WHERE chat_id = ?", (chat_id,))
+            self.conn.execute("DELETE FROM target_chat_messages WHERE chat_id = ?", (chat_id,))
 
     def get_all(self) -> list[int]:
         rows = self.conn.execute("SELECT chat_id FROM subscribers").fetchall()
@@ -74,6 +84,39 @@ class SubscriberRepository:
                 "INSERT OR REPLACE INTO system_state(key, value) VALUES (?, ?)",
                 (key, value),
             )
+
+    def get_target_message_id(self, target_id: str, chat_id: int) -> int | None:
+        row = self.conn.execute(
+            "SELECT message_id FROM target_chat_messages WHERE target_id = ? AND chat_id = ?",
+            (target_id, chat_id),
+        ).fetchone()
+        return row["message_id"] if row else None
+
+    def save_target_message_id(self, target_id: str, chat_id: int, message_id: int) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO target_chat_messages(target_id, chat_id, message_id, updated_at_utc)
+                VALUES (?, ?, ?, ?)
+                """,
+                (target_id, chat_id, message_id, now),
+            )
+
+    def has_target_alert(self, target_id: str) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM target_chat_messages WHERE target_id = ? LIMIT 1",
+            (target_id,),
+        ).fetchone()
+        return row is not None
+
+    def cleanup_old_target_messages(self, max_age_hours: int = 24) -> int:
+        cutoff = (datetime.now(UTC) - timedelta(hours=max_age_hours)).isoformat()
+        with self.conn:
+            return self.conn.execute(
+                "DELETE FROM target_chat_messages WHERE updated_at_utc < ?",
+                (cutoff,),
+            ).rowcount
 
 
 def create_bot_dispatcher(
@@ -426,16 +469,38 @@ async def broadcast_alert(bot: Bot, subscribers: SubscriberRepository, event: Al
     text = "\n".join(parts)
 
     for chat_id in chat_ids:
+        reply_to_msg_id = None
+        if event.target_id:
+            reply_to_msg_id = subscribers.get_target_message_id(event.target_id, chat_id)
+
         try:
-            await bot.send_message(
+            sent_msg = await bot.send_message(
                 chat_id=chat_id,
                 text=text,
                 parse_mode="Markdown",
                 disable_notification=event.is_silent,
                 disable_web_page_preview=True,
+                reply_to_message_id=reply_to_msg_id,
             )
+            if event.target_id and sent_msg and getattr(sent_msg, "message_id", None):
+                subscribers.save_target_message_id(event.target_id, chat_id, sent_msg.message_id)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Не вдалося надіслати сповіщення {chat_id}: {exc}")
+            # If reply failed (e.g. original message was deleted in chat), fallback to sending without reply
+            if reply_to_msg_id is not None:
+                try:
+                    sent_msg = await bot.send_message(
+                        chat_id=chat_id,
+                        text=text,
+                        parse_mode="Markdown",
+                        disable_notification=event.is_silent,
+                        disable_web_page_preview=True,
+                    )
+                    if event.target_id and sent_msg and getattr(sent_msg, "message_id", None):
+                        subscribers.save_target_message_id(event.target_id, chat_id, sent_msg.message_id)
+                except Exception as retry_exc:  # noqa: BLE001
+                    logger.warning(f"Не вдалося надіслати сповіщення {chat_id}: {retry_exc}")
+            else:
+                logger.warning(f"Не вдалося надіслати сповіщення {chat_id}: {exc}")
 
 
 

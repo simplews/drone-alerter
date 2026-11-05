@@ -181,14 +181,20 @@ class Application:
 
     async def _timeouts_loop(self) -> None:
         """Periodically check for expired targets and broadcast alerts if any."""
+        cleanup_counter = 0
         while True:
             await asyncio.sleep(15.0)
+            cleanup_counter += 1
             try:
                 alerts = self.tracker.check_timeouts()
                 for alert in alerts:
                     logger.info(f"🚨 [ТАЙМАУТ/СПОЗВІЩЕННЯ] {alert.title} (ціль={alert.target_id})")
                     if self.bot:
                         await broadcast_alert(self.bot, self.subscriber_repo, alert)
+                if cleanup_counter >= 240:  # ~1 hour
+                    cleanup_counter = 0
+                    if self.subscriber_repo:
+                        self.subscriber_repo.cleanup_old_target_messages(max_age_hours=24)
             except asyncio.CancelledError:
                 break
             except Exception:
