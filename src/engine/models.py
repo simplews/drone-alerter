@@ -85,6 +85,7 @@ class Target:
     confidence: str = "low"     # low, medium, high
     channels: set[str] = field(default_factory=set)
     message_ids: list[tuple[str, int]] = field(default_factory=list)
+    alerted: bool = False
 
 
 @dataclass

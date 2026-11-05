@@ -596,6 +596,29 @@ class TestTargetTracker(unittest.TestCase):
         broadcast_alerts = [a for a in alerts if not a.is_update]
         self.assertEqual(len(broadcast_alerts), 0)
 
+        targets = self.tracker.get_active_targets()
+        self.assertEqual(len(targets), 1)
+        self.assertFalse(targets[0].alerted)
+
+        # Subsequent timeout must NOT emit an alert to subscribers for an unalerted target
+        after_eta = targets[0].eta_window_end_utc + timedelta(minutes=10)
+        timeout_alerts = self.tracker.check_timeouts(now=after_eta)
+        self.assertEqual(len(timeout_alerts), 0)
+        self.assertEqual(targets[0].status, TargetStatus.LOST)
+
+        # Subsequent action must also NOT emit an alert to subscribers for an unalerted target
+        t_action = t_received + timedelta(minutes=2)
+        p_fresh = RawPost("chan_a", 28070, "Реактивний БпЛА біля Дунаївців", t_action)
+        # Create fresh target but with stale delay
+        alerts_stale2 = self.tracker.process_message(p_fresh, self.normalizer.parse(p_fresh), now=t_action + timedelta(minutes=20))
+        self.assertEqual(len([a for a in alerts_stale2 if not a.is_update]), 0)
+        t_active = [t for t in self.tracker.get_active_targets() if not t.alerted]
+        self.assertGreaterEqual(len(t_active), 1)
+
+        p_div = RawPost("chan_a", 28071, "відвернув на Рівне", t_action + timedelta(minutes=3))
+        div_alerts = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_action + timedelta(minutes=3))
+        self.assertEqual(len(div_alerts), 0)
+
     def test_simultaneous_two_waves_and_otynia_no_downgrade(self):
         """Replicate tonight's 00:03-00:30 UTC two-wave attack:
         - Wave 1 advances Nova Ushytsia -> Borshchiv -> Chernelytsia (Level 3A).
