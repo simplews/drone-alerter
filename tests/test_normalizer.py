@@ -711,6 +711,21 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(res_stryi.action, ActionType.DIVERTED)
         self.assertIn("Стрий", res_stryi.divert_destinations)
 
+        # Missile west transit (Stryi / Stryishchyna / Dashava / Khodoriv) is DIVERTED, not lviv_missile
+        p_mis_stryi = RawPost("monitoring_zaxid", 31904, "2 ракети на Дашаву / Стрий", t0)
+        res_mis_stryi = self.normalizer.parse(p_mis_stryi)
+        self.assertEqual(res_mis_stryi.action, ActionType.DIVERTED)
+        self.assertEqual(res_mis_stryi.points, [])
+
+        p_mis_transit = RawPost("monitoring_zaxid", 31920, "Повз Бурштин і Рогатин 3 ракети в бік Стрийщини", t0)
+        res_mis_transit = self.normalizer.parse(p_mis_transit)
+        self.assertEqual(res_mis_transit.action, ActionType.DIVERTED)
+        self.assertIn("Стрийщину", res_mis_transit.divert_destinations)
+
+        # Novodnistrovsk maps to its own regional point, not kelmentsi
+        p_nov = RawPost("monitoring_zaxid", 31480, "Чернівецька область:\n1 шахед на Новодністровськ", t0)
+        self.assertEqual(self.normalizer.parse(p_nov).points, ["novodnistrovsk"])
+
     def test_negation_chatty_and_conditional_posts_do_not_trigger_points(self):
         """Debunking negations, thank-you posts, and conditional warnings must not create targets."""
         t0 = datetime(2026, 11, 20, 5, 0, 0, tzinfo=UTC)

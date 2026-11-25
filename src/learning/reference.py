@@ -208,6 +208,13 @@ class ActiveReferenceCache:
                 for sw in profile.stopwords:
                     if sw not in ref.stopwords:
                         ref.stopwords.append(sw)
+                # Build map of aliases claimed by other profile points so moved aliases (e.g. Novodnistrovsk)
+                # don't remain stale on their old point in an immutable reference version.
+                alias_owner: dict[str, str] = {}
+                for item in profile.points:
+                    for nm in item.get("names", []):
+                        alias_owner[normalize(nm)] = item["id"]
+
                 for item in profile.points:
                     pid = item["id"]
                     if pid not in ref.points:
@@ -228,6 +235,8 @@ class ActiveReferenceCache:
                             lon=float(item["lon"]) if item.get("lon") is not None else None,
                         )
                     else:
+                        if "level" in item:
+                            ref.points[pid].level = int(item["level"])
                         if "is_regional" in item:
                             ref.points[pid].is_regional = bool(item["is_regional"])
                         if "is_contextual" in item:
@@ -238,6 +247,10 @@ class ActiveReferenceCache:
                             ref.points[pid].lat = float(item["lat"])
                         if item.get("lon") is not None:
                             ref.points[pid].lon = float(item["lon"])
+                        ref.points[pid].names = [
+                            nm for nm in ref.points[pid].names
+                            if alias_owner.get(normalize(nm), pid) == pid
+                        ]
                         for name in item.get("names", []):
                             if name not in ref.points[pid].names:
                                 ref.points[pid].names.append(name)

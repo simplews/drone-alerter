@@ -48,9 +48,13 @@ _TERNOPIL_LVIV_DEST_RE = re.compile(
     r"миколаїв\w*|новий\s+розділ|радехів\w*|лопатин\w*)\b"
 )
 _LVIV_BORDER_DEST_RE = re.compile(
-    r"(?i)\b(перемишлян\w*|поморян\w*|бібрк\w*|пустомит\w*|львів\w*|винник\w*|стрий\w*|"
+    r"(?i)\b(перемишлян\w*|поморян\w*|бібрк\w*|пустомит\w*|львів\w*|винник\w*|стрий\w*|стрийщин\w*|"
+    r"дашав\w*|моршин\w*|сколе|закарпатт\w*|"
     r"жидaчів\w*|жидачів\w*|ходарів\w*|ходорів\w*|рогатин\w*|миколаїв\w*|новий\s+розділ|"
     r"радехів\w*|лопатин\w*)\b"
+)
+_IF_BYPASS_TO_REGIONAL_RE = re.compile(
+    r"(?i)\b(облет\w*|обліта\w*|більше\s+не\s+летит\w*|поворот\s+на|відверну\w*)\b"
 )
 _CARDINAL_DEST_RE = re.compile(
     r"(?i)\b(північ\w*|південь\w*|південн\w*|схід\w*|східн\w*|захід\w*|західн\w*)\b"
@@ -242,8 +246,8 @@ class TargetTracker:
 
             # Prevent cross-corridor merging between central Khmelnytskyi (Dunaivtsi) and Bukovyna (Kelmentsi/Novodnistrovsk)
             if (
-                (target.last_point_id == "dunaivtsi" and point_id == "kelmentsi")
-                or (target.last_point_id == "kelmentsi" and point_id == "dunaivtsi")
+                (target.last_point_id == "dunaivtsi" and point_id in ("kelmentsi", "novodnistrovsk"))
+                or (target.last_point_id in ("kelmentsi", "novodnistrovsk") and point_id == "dunaivtsi")
             ):
                 continue
 
@@ -409,6 +413,46 @@ class TargetTracker:
 
                     if parsed.target_type:
                         target.target_type = parsed.target_type
+
+                    # If a Level 3A/3B target explicitly bypasses IF toward a regional hub
+                    # (e.g. "облетів Франківськ у бік Бурштина", "Поворот на Богородчани"),
+                    # transition it to DIVERTED so subscribers know the direct city threat turned away.
+                    if (
+                        bool(getattr(point, "is_regional", False))
+                        and target.level in (AlertLevel.LEVEL_3A, AlertLevel.LEVEL_3B)
+                        and _IF_BYPASS_TO_REGIONAL_RE.search(normalize(post.text))
+                    ):
+                        prev_point_name = format_place_title(target.last_point_id)
+                        if target.last_point_id in ref.points and ref.points[target.last_point_id].names:
+                            prev_point_name = format_place_title(ref.points[target.last_point_id].names[0])
+                        dest_name = format_place_title(point.names[0]) if point.names else format_place_title(point_id)
+                        target.status = TargetStatus.DIVERTED
+                        target.last_seen_utc = max(target.last_seen_utc, post.posted_at_utc)
+                        if (post.channel, post.message_id) not in target.message_ids:
+                            target.message_ids.append((post.channel, post.message_id))
+                        source_links = [(post.channel, f"https://t.me/{post.channel}/{post.message_id}")] if (post.channel and post.message_id) else []
+                        if self._is_siren_active_fn():
+                            div_body = (
+                                f"↗️ Ціль у районі {prev_point_name} відвернула на {dest_name}. "
+                                "Залишайтеся в укриттях до оголошення відбою."
+                            )
+                        else:
+                            div_body = (
+                                f"↗️ Ціль у районі {prev_point_name} відвернула на {dest_name}. "
+                                "Слідкуйте за офіційними повідомленнями і не ігноруйте сигнали "
+                                "повітряної тривоги, якщо її все ж буде оголошено."
+                            )
+                        pending_alerts_by_target[target.id] = AlertEvent(
+                            target_id=target.id,
+                            level=AlertLevel.INFO,
+                            title="Ціль змінила курс",
+                            body=div_body,
+                            is_silent=True,
+                            source_links=source_links,
+                        )
+                        line_target = target
+                        targets_matched_in_post.add(target.id)
+                        continue
 
                     # Keep target.last_point_id monotonic (closest to protected city);
                     # do not overwrite a main-corridor Level 2/3 target with a regional point
