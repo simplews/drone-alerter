@@ -812,14 +812,14 @@ class TestTargetTracker(unittest.TestCase):
         self.assertFalse(alerts_kal[0].is_silent)
         self.assertIn("🚀 Зафіксовано рух крилатої ракети (КР Калібр)", alerts_kal[0].body)
 
-        # 5. Burshtyn is classified as Level 2 approach alert
+        # 5. Burshtyn is classified as a regional threat vector (silent for drones at 38 km, loud for missiles)
         t4 = t3 + timedelta(minutes=1)
         p_burshtyn = RawPost("monitoring_zaxid", 5005, "Реактивна герань курсом на Бурштин!", t4)
         alerts_bur = self.tracker.process_message(p_burshtyn, self.normalizer.parse(p_burshtyn), now=t4)
         self.assertEqual(len(alerts_bur), 1)
-        self.assertEqual(alerts_bur[0].level, AlertLevel.LEVEL_2)
+        self.assertEqual(alerts_bur[0].level, AlertLevel.REGIONAL)
         self.assertIn("Бурштин", alerts_bur[0].title)
-        self.assertFalse(alerts_bur[0].is_silent)
+        self.assertTrue(alerts_bur[0].is_silent)
 
     def test_missile_corridor_level1_to_if_escalation(self):
         """Cruise missiles heading toward Khmelnytskyi, Ternopil, or Lviv must create Level 1 targets
@@ -1003,8 +1003,7 @@ class TestTargetTracker(unittest.TestCase):
 
         active = {t.last_point_id: t for t in self.tracker.get_active_targets()}
         self.assertIn("dunaivtsi", active)
-        self.assertIn("kelmentsi", active)
-        self.assertIn("vendychany", active["kelmentsi"].points_sequence)
+        self.assertIn("novodnistrovsk", active)
 
     def test_khmelnytskyi_airport_does_not_hijack_buchach_target(self):
         """Regression test for 2026-10-20T00:20Z:
@@ -1068,12 +1067,11 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts_buch), 1)
         self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "buchach")
 
-        # 3. Progression to Burshtyn
+        # 3. Progression to Burshtyn (regional hub — does not falsely overwrite Level 2 approach point)
         t2 = t1 + timedelta(minutes=6)
         p_bur = RawPost("kudy_letyt", 126205, "Франківщина:\nРеактивний БпЛА курсом на Бурштин", t2)
         alerts_bur = self.tracker.process_message(p_bur, self.normalizer.parse(p_bur), now=t2)
         self.assertEqual(len(alerts_bur), 1)
-        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "burshtyn")
 
         # 4. Diversion towards Stryi
         t3 = t2 + timedelta(minutes=4)
@@ -1103,6 +1101,55 @@ class TestTargetTracker(unittest.TestCase):
         p_hor = RawPost("chan_a", 11, "Івано-Франківщина:\nГрупа калібрів на Городенку", t0 + timedelta(minutes=4))
         self.tracker.process_message(p_hor, self.normalizer.parse(p_hor), now=t0 + timedelta(minutes=4))
         self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+    def test_if_bypass_to_burshtyn_and_bohorodchany_diverts_level3_target(self):
+        """A Level 3 target that bypasses IF toward Burshtyn or turns to Bohorodchany emits a course-change alert."""
+        t0 = datetime(2026, 11, 20, 5, 45, 0, tzinfo=UTC)
+        p_city = RawPost("chan_a", 1, "Івано-Франківськ: реактив на Микитинці", t0)
+        alerts_city = self.tracker.process_message(p_city, self.normalizer.parse(p_city), now=t0)
+        self.assertEqual(alerts_city[0].level, AlertLevel.LEVEL_3B)
+
+        t1 = t0 + timedelta(minutes=3)
+        p_bypass = RawPost("chan_a", 2, "реактив облетів Франківськ у бік Бурштина", t1)
+        alerts_bypass = self.tracker.process_message(p_bypass, self.normalizer.parse(p_bypass), now=t1)
+        self.assertEqual(len(alerts_bypass), 1)
+        self.assertEqual(alerts_bypass[0].title, "Ціль змінила курс")
+        self.assertIn("Бурштин", alerts_bypass[0].body)
+        self.assertEqual(self.tracker.get_active_targets(), [])
+
+        # Same for a missile turning from Tysmenytsia to Bohorodchany
+        t2 = t1 + timedelta(minutes=5)
+        p_mis = RawPost("chan_a", 3, "Крилата ракета на Тисменицю", t2)
+        self.tracker.process_message(p_mis, self.normalizer.parse(p_mis), now=t2)
+        p_boh = RawPost("chan_a", 4, "Поворот на Богородчани", t2 + timedelta(minutes=1))
+        alerts_boh = self.tracker.process_message(p_boh, self.normalizer.parse(p_boh), now=t2 + timedelta(minutes=1))
+        self.assertEqual(len(alerts_boh), 1)
+        self.assertEqual(alerts_boh[0].title, "Ціль змінила курс")
+        self.assertIn("Богородчани", alerts_boh[0].body)
+
+    def test_missile_and_drone_west_transit_stryishchyna_diverts(self):
+        """Missiles and drones transiting past Burshtyn/Rohatyn toward Stryishchyna/Dashava are treated as diverts."""
+        t0 = datetime(2026, 11, 20, 5, 58, 0, tzinfo=UTC)
+        p_bur = RawPost("chan_a", 10, "Івано-Франківщина:\n3 ракети на Бурштин", t0)
+        alerts_bur = self.tracker.process_message(p_bur, self.normalizer.parse(p_bur), now=t0)
+        self.assertEqual(alerts_bur[0].level, AlertLevel.REGIONAL)
+        self.assertFalse(alerts_bur[0].is_silent)  # missiles on Burshtyn stay loud
+
+        p_stryi = RawPost("chan_a", 11, "Повз Бурштин і Рогатин 3 ракети в бік Стрийщини", t0 + timedelta(minutes=2))
+        alerts_div = self.tracker.process_message(p_stryi, self.normalizer.parse(p_stryi), now=t0 + timedelta(minutes=2))
+        self.assertEqual(len(alerts_div), 1)
+        self.assertEqual(alerts_div[0].title, "Ціль змінила курс")
+        self.assertIn("Стрийщину", alerts_div[0].body)
+
+    def test_novodnistrovsk_is_separate_regional_target(self):
+        """Novodnistrovsk is tracked as its own silent regional target rather than a main-corridor IF approach."""
+        t0 = datetime(2026, 11, 17, 15, 35, 0, tzinfo=UTC)
+        p = RawPost("chan_a", 20, "Чернівецька область:\n1 шахед на Новодністровськ", t0)
+        alerts = self.tracker.process_message(p, self.normalizer.parse(p), now=t0)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].level, AlertLevel.REGIONAL)
+        self.assertTrue(alerts[0].is_silent)
+        self.assertIn("Новодністровська", alerts[0].title)
 
 
 if __name__ == "__main__":

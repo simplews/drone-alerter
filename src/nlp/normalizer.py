@@ -135,8 +135,12 @@ _MISSILE_FAR_NORTH_DIVERT_RE = re.compile(
     r"(?i)\b(на\s+рівне|на\s+рівненщину|курсом\s+на\s+рівненщин\w*|на\s+волинь|на\s+луцьк|на\s+ковель|"
     r"на\s+житомир|на\s+житомирщину|на\s+київ|на\s+північ|відверну\w*\s+на\s+північ)\b"
 )
+_MISSILE_TRANSIT_WEST_DIVERT_RE = re.compile(
+    r"(?i)\b(?:у\s+напрямку|в\s+напрямку|в\s+бік|у\s+бік|курс\w*\s+на|на)\s+"
+    r"(?:стрийщин\w*|стрий\w*|дашав\w*|ходорів\w*|жидачів\w*|закарпатт\w*|моршин\w*|сколе)\b"
+)
 _MISSILE_LVIV_RE = re.compile(
-    r"(?i)\b(львів\w*|львов\w*|стрий\w*|ходорів\w*|жидачів\w*|перемишлян\w*|винник\w*)\b"
+    r"(?i)\b(львів\w*|львов\w*|перемишлян\w*|винник\w*)\b"
 )
 _MISSILE_TERNOPIL_RE = re.compile(
     r"(?i)\b(тернопіль\w*|тернопол\w*|чортків\w*|бережан\w*|теребовл\w*|підгайц\w*|"
@@ -235,11 +239,11 @@ class MessageNormalizer:
         dest = dest.strip()
         if not dest:
             return ""
-        # Handle locative region endings (-щині, -ччині -> -щину, -ччину)
-        if re.search(r"(?i)ччині$", dest):
-            dest = re.sub(r"(?i)ччині$", "ччину", dest)
-        elif re.search(r"(?i)щині$", dest):
-            dest = re.sub(r"(?i)щині$", "щину", dest)
+        # Handle locative/genitive region endings (-щині/-щини, -ччині/-ччини -> -щину, -ччину)
+        if re.search(r"(?i)ччин[іи]$", dest):
+            dest = re.sub(r"(?i)ччин[іи]$", "ччину", dest)
+        elif re.search(r"(?i)щин[іи]$", dest):
+            dest = re.sub(r"(?i)щин[іи]$", "щину", dest)
         return format_place_title(dest)
 
     @classmethod
@@ -751,7 +755,10 @@ class MessageNormalizer:
             if has_if_airport_or_over or has_if_direct_course or has_if_threat_warning:
                 line_has_divert = False
             elif line_is_missile:
-                line_has_divert = bool(_MISSILE_FAR_NORTH_DIVERT_RE.search(line_norm))
+                line_has_divert = bool(
+                    _MISSILE_FAR_NORTH_DIVERT_RE.search(line_norm)
+                    or _MISSILE_TRANSIT_WEST_DIVERT_RE.search(line_norm)
+                )
             else:
                 line_has_divert = self._has_divert_phrase(line_norm, ref.cancel_keywords)
 
