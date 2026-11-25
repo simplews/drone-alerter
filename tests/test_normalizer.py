@@ -711,6 +711,111 @@ class TestMessageNormalizer(unittest.TestCase):
         self.assertEqual(res_stryi.action, ActionType.DIVERTED)
         self.assertIn("Стрий", res_stryi.divert_destinations)
 
+    def test_negation_chatty_and_conditional_posts_do_not_trigger_points(self):
+        """Debunking negations, thank-you posts, and conditional warnings must not create targets."""
+        t0 = datetime(2026, 11, 20, 5, 0, 0, tzinfo=UTC)
+        # Prime missile context so inherited context is tested too
+        self.normalizer.parse(RawPost("chan_a", 1, "Івано-Франківщина:\n2 калібри на Бурштин", t0))
+
+        # 1. Explicit debunking / no-detection lines
+        p_debunk = RawPost("chan_a", 2, "Нема ніяких 20 ракет на Бурштин", t0 + timedelta(minutes=1))
+        self.assertEqual(self.normalizer.parse(p_debunk).points, [])
+
+        p_nobody = RawPost("chan_a", 3, "Ніхто на Івано-Франківськ наразі НЕ летить, де ви то берете..", t0 + timedelta(minutes=2))
+        self.assertEqual(self.normalizer.parse(p_nobody).points, [])
+
+        p_nofix = RawPost("chan_a", 4, "На Львівщині та Франківщині без фіксації калібрів", t0 + timedelta(minutes=3))
+        self.assertEqual(self.normalizer.parse(p_nofix).points, [])
+
+        # 2. Multi-line gratitude post mentioning a regional city must not inherit missile context
+        p_thanks = RawPost(
+            "chan_a",
+            5,
+            "Львів, Коломия та Луцьк ❤️\n\nЩиро вдячний усім за підтримку, ви найкращі",
+            t0 + timedelta(minutes=4),
+        )
+        self.assertEqual(self.normalizer.parse(p_thanks).points, [])
+
+        # 3. Conditional / hypothetical warning must not fire Level 3A if_direct_course
+        p_cond = RawPost(
+            "chan_a",
+            6,
+            "Якщо курс не зміниться, то в найближчий час можливе оголошення дронової небезпеки в Івано-Франківському районі",
+            t0 + timedelta(minutes=5),
+        )
+        self.assertEqual(self.normalizer.parse(p_cond).points, [])
+
+    def test_mixed_lost_and_active_clause_preserves_active_target(self):
+        """A line reporting one target lost and another heading to a corridor point must keep the active point."""
+        t0 = datetime(2026, 11, 20, 5, 35, 0, tzinfo=UTC)
+        p = RawPost("chan_a", 10, "Коломийська ракета не фіксується, Франківська на Тлумач", t0)
+        res = self.normalizer.parse(p)
+        self.assertEqual(res.points, ["tlumach"])
+        self.assertEqual(res.action, ActionType.NONE)
+        self.assertEqual(res.drone_type, DroneType.MISSILE)
+
+    def test_distant_course_toward_level_3b_keeps_upstream_position(self):
+        """An upstream sighting with a distant course toward Tysmenytsia must not jump to Level 3B."""
+        t0 = datetime(2026, 11, 20, 3, 37, 0, tzinfo=UTC)
+        p1 = RawPost("chan_a", 20, "Реактивна герань пролітає Товсте в бік Івано-Франківщини, віддалений курс на Тисменицю", t0)
+        self.assertEqual(self.normalizer.parse(p1).points, ["tovste"])
+
+        p2 = RawPost("chan_a", 21, "Крилата ракета повз Коломию в бік Тисмениці", t0 + timedelta(minutes=1))
+        self.assertEqual(self.normalizer.parse(p2).points, ["kolomyia"])
+
+    def test_dolyna_ternopil_homonym_and_divert_to_corridor_point(self):
+        """Village Dolyna in Ternopil oblast must not match IF Dolyna; slight turn toward corridor point is movement."""
+        t0 = datetime(2026, 11, 11, 8, 39, 0, tzinfo=UTC)
+        p_dol = RawPost("chan_a", 30, "Тернопільська область:\n1 реактивна герань на н.п. Долина / Хоростків", t0)
+        self.assertNotIn("dolyna", self.normalizer.parse(p_dol).points)
+
+        p_turn = RawPost("chan_a", 31, "Трішки відвернув, наразі рухається в бік н.п Городенка (ІФ область)", t0 + timedelta(minutes=2))
+        res_turn = self.normalizer.parse(p_turn)
+        self.assertEqual(res_turn.points, ["horodenka"])
+        self.assertEqual(res_turn.action, ActionType.NONE)
+
+    def test_conventional_shahed_not_misclassified_as_jet_and_new_aliases(self):
+        """Conventional Shahed in Ternopil warning stays CONVENTIONAL; Puzhnyky, outbound Lviv, and coarse dedup work."""
+        t0 = datetime(2026, 11, 17, 16, 18, 0, tzinfo=UTC)
+        p_shahed = RawPost(
+            "chan_a",
+            40,
+            "Івано-франківський район - дронова небезпека по шахеду на Тернопільщині, курс на Чернелицю",
+            t0,
+        )
+        res_shahed = self.normalizer.parse(p_shahed)
+        self.assertEqual(res_shahed.drone_type, DroneType.CONVENTIONAL)
+        self.assertEqual(res_shahed.points, ["chernelytsia"])
+
+        # Puzhnyky (near Tlumach) maps to tlumach
+        p_puzh = RawPost("chan_a", 41, "Івано-франківщина:\n4 калібри на Пужники", t0 + timedelta(minutes=5))
+        res_puzh = self.normalizer.parse(p_puzh)
+        self.assertEqual(res_puzh.points, ["tlumach"])
+        self.assertEqual(res_puzh.count, 4)
+
+        # Outbound Lviv missiles heading to Poland / northern Lviv oblast are ignored
+        p_pol = RawPost("chan_a", 42, "Ракета зі Львівщини в бік Польщі", t0 + timedelta(minutes=6))
+        self.assertEqual(self.normalizer.parse(p_pol).points, [])
+
+        # Multi-line Khmelnytskyi missile digest deduplicates coarse khmelnytskyi_missile bucket
+        p_khm_multi = RawPost(
+            "chan_a",
+            43,
+            "Хмельниччина:\n1 ракета на Старокостянтинів\n1 ракета на Антоніни\n1 ракета на Хмельницький\n1 ракета на Чемерівці",
+            t0 + timedelta(minutes=7),
+        )
+        res_khm = self.normalizer.parse(p_khm_multi)
+        self.assertEqual(res_khm.point_groups, [["khmelnytskyi_missile"]])
+
+        # Oblast-level return + explicit regional city stays regional (does not escalate to if_direct_course)
+        p_halych = RawPost(
+            "chan_a",
+            44,
+            "Розвертається знову на Івано-франківщину, курс на Галич. Через нього підвищена в ІФ",
+            t0 + timedelta(minutes=8),
+        )
+        self.assertEqual(self.normalizer.parse(p_halych).points, ["halych"])
+
 
 if __name__ == "__main__":
     unittest.main()

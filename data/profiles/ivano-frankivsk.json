@@ -63,7 +63,6 @@
         ]
       }
     ]
-
   },
   "stopwords": [
     "україна",
@@ -229,7 +228,9 @@
       "level": 1,
       "distance_km": 265.0,
       "eta_min": 32,
-      "eta_max": 40
+      "eta_max": 40,
+      "lat": 48.204,
+      "lon": 28.886
     },
     {
       "id": "vendychany",
@@ -241,7 +242,9 @@
       "level": 1,
       "distance_km": 225.0,
       "eta_min": 27,
-      "eta_max": 34
+      "eta_max": 34,
+      "lat": 48.618,
+      "lon": 27.785
     },
     {
       "id": "murovani_kyrylivtsi",
@@ -263,7 +266,9 @@
       "level": 1,
       "distance_km": 205.0,
       "eta_min": 27,
-      "eta_max": 36
+      "eta_max": 36,
+      "lat": 48.722,
+      "lon": 27.516
     },
     {
       "id": "nova_ushytsia",
@@ -344,7 +349,9 @@
       "level": 1,
       "distance_km": 190.0,
       "eta_min": 23,
-      "eta_max": 30
+      "eta_max": 30,
+      "lat": 48.836,
+      "lon": 27.271
     },
     {
       "id": "stara_ushytsia",
@@ -358,7 +365,9 @@
       "level": 1,
       "distance_km": 165.0,
       "eta_min": 21,
-      "eta_max": 27
+      "eta_max": 27,
+      "lat": 48.594,
+      "lon": 27.065
     },
     {
       "id": "dunaivtsi",
@@ -370,7 +379,9 @@
       "level": 1,
       "distance_km": 160.0,
       "eta_min": 19,
-      "eta_max": 25
+      "eta_max": 25,
+      "lat": 48.889,
+      "lon": 26.857
     },
     {
       "id": "tomashpil",
@@ -382,7 +393,9 @@
       "level": 1,
       "distance_km": 250.0,
       "eta_min": 35,
-      "eta_max": 43
+      "eta_max": 43,
+      "lat": 48.545,
+      "lon": 28.516
     },
     {
       "id": "kamianets_podilskyi",
@@ -412,7 +425,9 @@
       "level": 2,
       "distance_km": 135.0,
       "eta_min": 16,
-      "eta_max": 22
+      "eta_max": 22,
+      "lat": 48.68,
+      "lon": 26.581
     },
     {
       "id": "pudlivtsi",
@@ -425,7 +440,9 @@
       "level": 2,
       "distance_km": 133.0,
       "eta_min": 18,
-      "eta_max": 24
+      "eta_max": 24,
+      "lat": 48.729,
+      "lon": 26.556
     },
     {
       "id": "kelmentsi",
@@ -448,7 +465,9 @@
       "level": 1,
       "distance_km": 155.0,
       "eta_min": 19,
-      "eta_max": 25
+      "eta_max": 25,
+      "lat": 48.462,
+      "lon": 26.829
     },
     {
       "id": "skala_podilska",
@@ -474,7 +493,9 @@
       "level": 2,
       "distance_km": 110.0,
       "eta_min": 12,
-      "eta_max": 17
+      "eta_max": 17,
+      "lat": 48.853,
+      "lon": 26.201
     },
     {
       "id": "tovste",
@@ -486,7 +507,9 @@
       "level": 2,
       "distance_km": 75.0,
       "eta_min": 8,
-      "eta_max": 13
+      "eta_max": 13,
+      "lat": 48.847,
+      "lon": 25.724
     },
     {
       "id": "buchach",
@@ -504,7 +527,9 @@
       "level": 2,
       "distance_km": 68.0,
       "eta_min": 8,
-      "eta_max": 12
+      "eta_max": 12,
+      "lat": 49.062,
+      "lon": 25.394
     },
     {
       "id": "borshchiv",
@@ -518,7 +543,9 @@
       "level": 2,
       "distance_km": 95.0,
       "eta_min": 11,
-      "eta_max": 16
+      "eta_max": 16,
+      "lat": 48.803,
+      "lon": 26.038
     },
     {
       "id": "chortkiv",
@@ -538,7 +565,9 @@
       "level": 2,
       "distance_km": 82.0,
       "eta_min": 9,
-      "eta_max": 15
+      "eta_max": 15,
+      "lat": 49.017,
+      "lon": 25.798
     },
     {
       "id": "zalishchyky",
@@ -555,7 +584,9 @@
       "level": 2,
       "distance_km": 81.0,
       "eta_min": 9,
-      "eta_max": 15
+      "eta_max": 15,
+      "lat": 48.641,
+      "lon": 25.736
     },
     {
       "id": "chernelytsia",
@@ -568,7 +599,9 @@
       "level": 3,
       "distance_km": 54.0,
       "eta_min": 5,
-      "eta_max": 9
+      "eta_max": 9,
+      "lat": 48.812,
+      "lon": 25.431
     },
     {
       "id": "monastyryska",
@@ -582,7 +615,9 @@
       "level": 3,
       "distance_km": 48.0,
       "eta_min": 5,
-      "eta_max": 9
+      "eta_max": 9,
+      "lat": 49.088,
+      "lon": 25.168
     },
     {
       "id": "tlumach",
@@ -597,12 +632,18 @@
         "озерянах",
         "гринівці",
         "гринівців",
-        "гринівцях"
+        "гринівцях",
+        "пужники",
+        "пужників",
+        "пужниках",
+        "пужник"
       ],
       "level": 3,
       "distance_km": 25.0,
       "eta_min": 3,
-      "eta_max": 6
+      "eta_max": 6,
+      "lat": 48.864,
+      "lon": 24.996
     },
     {
       "id": "yezupil",
@@ -615,7 +656,9 @@
       "level": 3,
       "distance_km": 18.0,
       "eta_min": 2,
-      "eta_max": 5
+      "eta_max": 5,
+      "lat": 49.038,
+      "lon": 24.777
     },
     {
       "id": "tysmenytsia",
@@ -628,7 +671,9 @@
       "level": 3,
       "distance_km": 12.0,
       "eta_min": 0,
-      "eta_max": 3
+      "eta_max": 3,
+      "lat": 48.902,
+      "lon": 24.849
     },
     {
       "id": "pidpechery",
@@ -642,7 +687,9 @@
       "level": 3,
       "distance_km": 9.0,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.943,
+      "lon": 24.805
     },
     {
       "id": "yamnytsia",
@@ -655,7 +702,9 @@
       "level": 3,
       "distance_km": 8.5,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.993,
+      "lon": 24.707
     },
     {
       "id": "cherniiv",
@@ -673,7 +722,9 @@
       "level": 3,
       "distance_km": 8.0,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.856,
+      "lon": 24.712
     },
     {
       "id": "drahomyrchany",
@@ -687,7 +738,9 @@
       "level": 3,
       "distance_km": 7.5,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.876,
+      "lon": 24.648
     },
     {
       "id": "khryplyn",
@@ -701,7 +754,9 @@
       "level": 3,
       "distance_km": 7.0,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.888,
+      "lon": 24.762
     },
     {
       "id": "kluziv",
@@ -719,7 +774,9 @@
       "level": 3,
       "distance_km": 6.5,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.958,
+      "lon": 24.725
     },
     {
       "id": "vovchyntsi",
@@ -737,7 +794,9 @@
       "level": 3,
       "distance_km": 6.0,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.948,
+      "lon": 24.752
     },
     {
       "id": "uhryniv",
@@ -755,7 +814,9 @@
       "level": 3,
       "distance_km": 5.5,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.958,
+      "lon": 24.696
     },
     {
       "id": "mykytyntsi",
@@ -773,7 +834,9 @@
       "level": 3,
       "distance_km": 5.0,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.909,
+      "lon": 24.756
     },
     {
       "id": "krykhivtsi",
@@ -791,7 +854,9 @@
       "level": 3,
       "distance_km": 4.5,
       "eta_min": 0,
-      "eta_max": 2
+      "eta_max": 2,
+      "lat": 48.898,
+      "lon": 24.682
     },
     {
       "id": "bukovyna_if_course",
@@ -846,7 +911,9 @@
       "distance_km": 190.0,
       "eta_min": 14,
       "eta_max": 17,
-      "is_contextual": true
+      "is_contextual": true,
+      "lat": 49.423,
+      "lon": 26.987
     },
     {
       "id": "ternopil_missile",
@@ -857,7 +924,9 @@
       "distance_km": 120.0,
       "eta_min": 8,
       "eta_max": 11,
-      "is_contextual": true
+      "is_contextual": true,
+      "lat": 49.553,
+      "lon": 25.594
     },
     {
       "id": "lviv_missile",
@@ -868,7 +937,9 @@
       "distance_km": 115.0,
       "eta_min": 8,
       "eta_max": 11,
-      "is_contextual": true
+      "is_contextual": true,
+      "lat": 49.839,
+      "lon": 24.029
     },
     {
       "id": "bohorodchany",
@@ -881,7 +952,9 @@
       "name_gen": "Богородчан",
       "level": 1,
       "distance_km": 18.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.808,
+      "lon": 24.538
     },
     {
       "id": "halych",
@@ -898,7 +971,9 @@
       "name_gen": "Галича",
       "level": 1,
       "distance_km": 25.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 49.124,
+      "lon": 24.729
     },
     {
       "id": "otyniia",
@@ -906,12 +981,17 @@
         "отинія",
         "отинії",
         "отинію",
-        "отинією"
+        "отинією",
+        "отиніїв",
+        "отинієві",
+        "отинієва"
       ],
       "name_gen": "Отинії",
       "level": 1,
       "distance_km": 28.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.736,
+      "lon": 24.855
     },
     {
       "id": "kalush",
@@ -932,7 +1012,9 @@
       "name_gen": "Калуша",
       "level": 1,
       "distance_km": 30.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 49.044,
+      "lon": 24.359
     },
     {
       "id": "burshtyn",
@@ -953,7 +1035,9 @@
       "distance_km": 38.0,
       "eta_min": 4.0,
       "eta_max": 9.0,
-      "is_regional": false
+      "is_regional": false,
+      "lat": 49.26,
+      "lon": 24.629
     },
     {
       "id": "kolomyia",
@@ -973,7 +1057,9 @@
       "name_gen": "Коломиї",
       "level": 1,
       "distance_km": 55.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.526,
+      "lon": 25.039
     },
     {
       "id": "rohatyn",
@@ -993,7 +1079,9 @@
       "name_gen": "Рогатина",
       "level": 1,
       "distance_km": 60.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 49.41,
+      "lon": 24.611
     },
     {
       "id": "horodenka",
@@ -1011,7 +1099,9 @@
       "name_gen": "Городенки",
       "level": 1,
       "distance_km": 65.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.668,
+      "lon": 25.502
     },
     {
       "id": "dolyna",
@@ -1032,7 +1122,9 @@
       "name_gen": "Долини",
       "level": 1,
       "distance_km": 50.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.972,
+      "lon": 23.99
     },
     {
       "id": "nadvirna",
@@ -1053,7 +1145,9 @@
       "name_gen": "Надвірної",
       "level": 1,
       "distance_km": 29.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.634,
+      "lon": 24.575
     },
     {
       "id": "sniatyn",
@@ -1073,7 +1167,9 @@
       "name_gen": "Снятина",
       "level": 1,
       "distance_km": 80.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 48.45,
+      "lon": 25.568
     },
     {
       "id": "voinyliv",
@@ -1088,7 +1184,9 @@
       "name_gen": "Войнилова",
       "level": 1,
       "distance_km": 30.0,
-      "is_regional": true
+      "is_regional": true,
+      "lat": 49.124,
+      "lon": 24.496
     }
   ]
 }

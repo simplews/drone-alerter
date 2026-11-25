@@ -56,8 +56,34 @@ _ACTIVE_FLIGHT_RE = re.compile(
     r"реактив\w*|бпла|шахед\w*|геран\w*|ракет\w*|калібр\w*|[хx]-?101|ціл[ьі])\b"
 )
 _IF_NEGATED_RE = re.compile(
-    r"(?i)\b(немає|нема|без|не\s+фіксується|не\s+спостерігається)\b|"
+    r"(?i)\b(немає|нема|без|не\s+фіксується|не\s+спостерігається|ніхто|нічого)\b|"
+    r"\bне\s+летит\w*|"
     r"не\s+(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку)\s+(?:івано-)?франківськ"
+)
+_LINE_NEGATED_RE = re.compile(
+    r"(?i)(?:"
+    r"\bнема(?:є)?\s+(?:ніяких|жодн\w*|ракет\w*|бпла|шахед\w*|геран\w*|ціл\w*|\d+)|"
+    r"\bбез\s+фіксац\w*|"
+    r"\b(?:ніхто|нічого)\b.*\bне\s+летит\w*"
+    r")"
+)
+_CHATTY_OR_THANKS_RE = re.compile(
+    r"(?i)\b(дякую|вдячн\w*|підтримк\w*|ви\s+найкращ\w*|доброї\s+ночі|бережіть\s+себе|на\s+добраніч)\b"
+)
+_CONDITIONAL_WARNING_RE = re.compile(
+    r"(?i)\b(якщо\s+курс\s+не\s+зміниться|можлив\w*\s+оголошенн\w*|може\s+бути\s+оголошен\w*)\b"
+)
+_LVIV_OUTBOUND_RE = re.compile(
+    r"(?i)\b(польщ\w*|жовкв\w*|добротвір\w*|добротвор\w*|яворів\w*|рава-руськ\w*|червоноград\w*|шептицьк\w*|сокал\w*)\b"
+)
+_CLAUSE_SPLIT_RE = re.compile(
+    r"(?i)(?:[,;]\s+(?=(?:але|а\s+|інш\w*|ще\s+|наступн\w*|франків\w*|коломий\w*|тернопіль\w*|бурштин\w*))|\s+але\s+)"
+)
+_DISTANT_COURSE_PREFIX_RE = re.compile(
+    r"(?i)\bвіддален\w*\s+курс\w*\s+(?:прямо\s+)?(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку)\s*$"
+)
+_DIRECTION_TOWARD_PREFIX_RE = re.compile(
+    r"(?i)\b(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку|курс\w*\s+(?:прямо\s+)?на|до)\s+(?:н\.?\s*п\.?\s*)?$"
 )
 _IF_OVER_CITY_RE = re.compile(
     r"(?i)(?:"
@@ -82,6 +108,17 @@ _IF_DIRECT_COURSE_RE = re.compile(
     r"відверну\w*\s+на|зміни\w*\s+курс\s+на)\s+(?:місто\s+|м\.\s*)?"
     r"(?:івано-франківськ\w*|франківськ\w*|іф\b|(?:івано-)?франківщин\w*|прикарпатт\w*)|"
     r"\bна\s+(?:місто\s+|м\.\s*)?(?:івано-франківськ|франківськ|іф|(?:івано-)?франківщину|прикарпаття)\b"
+    r")"
+)
+_IF_CITY_COURSE_RE = re.compile(
+    r"(?i)(?:"
+    r"\b(?:курс\w*(?:\s+\S+){0,2}\s+(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку)|"
+    r"напрямк\w*\s+на|у\s+напрямку|в\s+напрямку|у\s+бік|в\s+бік|пряму\w*\s+на|летит\w*\s+на|"
+    r"руха\w*(?:\s+\S+){0,2}\s+(?:на|в\s+бік|у\s+бік|в\s+напрямку|у\s+напрямку)|"
+    r"йде\s+на|іде\s+на|підверта\w*\s+на|поверта\w*\s+на|поверну\w*\s+на|заверта\w*\s+на|"
+    r"відверну\w*\s+на|зміни\w*\s+курс\s+на)\s+(?:місто\s+|м\.\s*)?"
+    r"(?:івано-франківськ\w*|франківськ\w*|іф\b)|"
+    r"\bна\s+(?:місто\s+|м\.\s*)?(?:івано-франківськ|франківськ|іф)\b"
     r")"
 )
 _IF_THREAT_WARNING_RE = re.compile(
@@ -373,16 +410,33 @@ class MessageNormalizer:
         ):
             return False
 
-        # 5. Guard against homonyms for Dolyna (Lypova Dolyna in Sumy, Dolynska in Kirovohrad)
-        return not (pid == "dolyna" and bool(re.search(r"(?i)\b(липов\w+\s+долин\w*|долинськ\w*)\b", line_norm)))
+        # 5. Guard against homonyms for Dolyna (Lypova Dolyna in Sumy, Dolynska in Kirovohrad,
+        # and village Dolyna in Ternopil oblast near Terebovlia/Khorostkiv)
+        if pid == "dolyna":
+            if re.search(r"(?i)\b(липов\w+\s+долин\w*|долинськ\w*)\b", line_norm):
+                return False
+            if (
+                re.search(r"(?i)\b(тернопіль\w*|тернопол\w*)\b", ctx_norm)
+                and not re.search(r"(?i)\b(франків\w*|прикарпат\w*|іф)\b", ctx_norm)
+            ):
+                return False
+
+        # 6. Regional IF points must not match under a Ternopil oblast header unless IF transition is explicit
+        return not (
+            is_reg
+            and re.search(r"(?i)\b(тернопіль\w*|тернопол\w*)\b", active_header_norm)
+            and not re.search(r"(?i)\b(франків\w*|прикарпат\w*|іф)\b", line_norm)
+        )
 
     def parse(self, post: RawPost) -> ParsedMessage:
         text = post.text
         norm_text = normalize(text)
         ref = self._get_ref()
 
-        # 0. Ignore statistical summaries and non-UAV news reports
-        if _SUMMARY_OR_NEWS_RE.search(norm_text):
+        # 0. Ignore statistical summaries, non-UAV news reports, and pure gratitude/chatty posts
+        if _SUMMARY_OR_NEWS_RE.search(norm_text) or (
+            _CHATTY_OR_THANKS_RE.search(norm_text) and not _ACTIVE_FLIGHT_RE.search(norm_text)
+        ):
             return ParsedMessage(
                 is_jet=False,
                 points=[],
@@ -444,9 +498,24 @@ class MessageNormalizer:
         # Track whether the current paragraph block belongs to a distant or northern region header (e.g. "**Кіровоградщина:**")
         in_distant_section = False
 
+        # Expand lines that mix a downed/lost clause with an active movement clause
+        expanded_lines: list[tuple[str, bool]] = []  # (line_text, is_raw_blank)
         for raw_line in text.splitlines():
-            line_strip = raw_line.strip()
-            if not line_strip:
+            ls = raw_line.strip()
+            if not ls:
+                expanded_lines.append(("", True))
+                continue
+            ln_check = normalize(ls)
+            if (_DOWNED_RE.search(ln_check) or _LOST_RE.search(ln_check)) and _CLAUSE_SPLIT_RE.search(ls):
+                parts = [p.strip() for p in _CLAUSE_SPLIT_RE.split(ls) if p.strip()]
+                if len(parts) > 1:
+                    for part in parts:
+                        expanded_lines.append((part, False))
+                    continue
+            expanded_lines.append((ls, False))
+
+        for line_strip, is_blank in expanded_lines:
+            if is_blank:
                 in_distant_section = False
                 active_corridor_header_norm = ""
                 continue
@@ -456,6 +525,15 @@ class MessageNormalizer:
             line_norm = _PAREN_PREVENTIVE_RE.sub(" ", normalize(line_strip)).strip()
             line_norm = re.sub(r"\s+", " ", line_norm)
             if not line_norm:
+                continue
+
+            # Ignore non-flight gratitude/chatty lines (e.g. "Львів, Коломия та Луцьк ❤️ Дякую за підтримку")
+            if _CHATTY_OR_THANKS_RE.search(line_norm) and not _ACTIVE_FLIGHT_RE.search(line_norm):
+                continue
+
+            # Ignore explicit debunking / no-detection lines (e.g. "Нема ніяких 20 ракет на Бурштин",
+            # "На Львівщині та Франківщині без фіксації калібрів", "Ніхто на Івано-Франківськ наразі не летить")
+            if _LINE_NEGATED_RE.search(line_norm):
                 continue
 
             is_header = self._is_section_header(line_strip)
@@ -480,7 +558,7 @@ class MessageNormalizer:
                 continue
 
             # Find corridor points on this specific line, masking compound non-corridor names first
-            raw_line_matches: list[tuple[str, str]] = []  # (point_id, matched_alias)
+            raw_line_matches: list[tuple[str, str, int]] = []  # (point_id, matched_alias, start_idx)
             line_spans: list[tuple[int, int]] = [
                 m.span() for m in _NON_CORRIDOR_COMPOUND_PLACE_RE.finditer(line_norm)
             ]
@@ -503,22 +581,48 @@ class MessageNormalizer:
                         continue
 
                     line_spans.append((s, e))
-                    raw_line_matches.append((pid, alias))
+                    raw_line_matches.append((pid, alias, s))
 
             # If a specific settlement is present on this line, generic raion qualifiers
             # (e.g. "Чернелиця, Коломийський район", "Дунаївці, Камʼянець-Подільський р-н")
             # are administrative clarifications and should not trigger the raion center as a second point.
             has_specific_settlement = any(
                 not re.search(r"(?i)\b(?:район\w*|р-н\w*|рн)\b", alias)
-                for _, alias in raw_line_matches
+                for _, alias, _ in raw_line_matches
             )
             line_points: list[str] = []
-            for pid, alias in raw_line_matches:
+            point_match_starts: dict[str, int] = {}
+            for pid, alias, s in raw_line_matches:
                 is_raion_alias = bool(re.search(r"(?i)\b(?:район\w*|р-н\w*|рн)\b", alias))
                 if has_specific_settlement and is_raion_alias:
                     continue
                 if pid not in line_points:
                     line_points.append(pid)
+                    point_match_starts[pid] = s
+
+            # If an upstream position (>= 40 km) is reported together with a distant course
+            # towards a close Level 3B suburb (<= 15 km, e.g. "Пролітає Товсте ..., віддалений курс на Тисменицю"
+            # or "Повз Коломию в бік Тисмениці"), keep the actual upstream position so we don't fire Level 3B prematurely.
+            if len(line_points) > 1:
+                has_upstream_pt = any(
+                    (ref.points[p].distance_km or 0.0) >= 40.0 for p in line_points if p in ref.points
+                )
+                if has_upstream_pt:
+                    filtered_pts: list[str] = []
+                    for pid in line_points:
+                        pt = ref.points.get(pid)
+                        dist = (pt.distance_km or 0.0) if pt else 0.0
+                        prefix = line_norm[:point_match_starts.get(pid, 0)]
+                        is_distant_course = bool(_DISTANT_COURSE_PREFIX_RE.search(prefix))
+                        is_distant_l3b_dest = (
+                            0.0 < dist <= 15.0
+                            and bool(_DIRECTION_TOWARD_PREFIX_RE.search(prefix))
+                        )
+                        if is_distant_course or is_distant_l3b_dest:
+                            continue
+                        filtered_pts.append(pid)
+                    if filtered_pts:
+                        line_points = filtered_pts
 
             line_is_clear = bool(_CLEAR_RE.search(line_norm))
             line_is_preventive = bool(_PREVENTIVE_RE.search(line_norm))
@@ -550,7 +654,12 @@ class MessageNormalizer:
                 bool(_IF_OVER_CITY_RE.search(line_norm)) or has_if_airport
             )
             has_if_direct_course = (not has_if_negation) and bool(_IF_DIRECT_COURSE_RE.search(line_norm))
-            has_if_threat_warning = (not has_if_negation) and bool(_IF_THREAT_WARNING_RE.search(line_norm))
+            has_if_city_course = (not has_if_negation) and bool(_IF_CITY_COURSE_RE.search(line_norm))
+            has_if_threat_warning = (
+                (not has_if_negation)
+                and not _CONDITIONAL_WARNING_RE.search(line_norm)
+                and bool(_IF_THREAT_WARNING_RE.search(line_norm))
+            )
 
             # Ignore northern-track lines (Rivne/Volyn/Shepetivka/Bilohiria/etc.) that have no southern corridor points
             has_northern_track = bool(_NORTHERN_TRACK_RE.search(line_norm))
@@ -585,10 +694,11 @@ class MessageNormalizer:
                 continue
 
             # Populate contextual Ivano-Frankivsk points when no main-corridor settlement was matched
+            # (When only regional points are present, escalate only on explicit city course, not oblast-wide mentions.)
             only_regional_points = bool(
                 line_points and all(getattr(ref.points.get(pid), "is_regional", False) for pid in line_points)
             )
-            if not line_points or (only_regional_points and (has_if_airport_or_over or has_if_direct_course)):
+            if not line_points or (only_regional_points and (has_if_airport_or_over or has_if_city_course)):
                 context_region_text = f"{active_corridor_header_norm} {line_norm}".strip()
                 if has_if_airport_or_over and "ivano_frankivsk" in ref.points and "ivano_frankivsk" not in line_points:
                     line_points.append("ivano_frankivsk")
@@ -620,7 +730,11 @@ class MessageNormalizer:
                     line_points.append("khmelnytskyi_missile")
                 if _MISSILE_TERNOPIL_RE.search(context_region_text) and "ternopil_missile" in ref.points:
                     line_points.append("ternopil_missile")
-                if _MISSILE_LVIV_RE.search(context_region_text) and "lviv_missile" in ref.points:
+                if (
+                    _MISSILE_LVIV_RE.search(context_region_text)
+                    and not _LVIV_OUTBOUND_RE.search(line_norm)
+                    and "lviv_missile" in ref.points
+                ):
                     line_points.append("lviv_missile")
 
             # Sort multiple points on the same line from upstream to downstream (descending distance_km)
@@ -642,18 +756,32 @@ class MessageNormalizer:
                 line_has_divert = self._has_divert_phrase(line_norm, ref.cancel_keywords)
 
             if line_points and line_has_divert:
-                # Example: "Реактивний БпЛА курсом на Закупне повз Дунаївці"
-                # The drone is passing/leaving the corridor point towards a diversion destination!
-                divert_detected = True
-                if divert_point_id is None:
-                    divert_point_id = line_points[0]
                 dest = self._extract_divert_destination(line_norm, ref.cancel_keywords)
-                if dest:
-                    if divert_destination is None:
-                        divert_destination = dest
-                    if dest not in divert_destinations:
-                        divert_destinations.append(dest)
-                corridor_action_lines.append(line_strip)
+                dest_is_corridor = bool(dest and normalize(dest) in alias_index)
+                headed_to_corridor_pt = any(
+                    bool(_DIRECTION_TOWARD_PREFIX_RE.search(line_norm[:point_match_starts.get(pid, 0)]))
+                    for pid in line_points
+                )
+                if (dest is None and headed_to_corridor_pt) or dest_is_corridor:
+                    # Target turned slightly *towards* a corridor point (e.g. "Трішки відвернув, в бік Городенки",
+                    # "Відвернув від Тисмениці, в бік Монастириська") — track active movement instead of DIVERTED.
+                    for pid in line_points:
+                        if pid not in points_found:
+                            points_found.append(pid)
+                    point_groups.append(line_points)
+                    relevant_lines.append(line_strip)
+                else:
+                    # Example: "Реактивний БпЛА курсом на Закупне повз Дунаївці"
+                    # The drone is passing/leaving the corridor point towards a diversion destination!
+                    divert_detected = True
+                    if divert_point_id is None:
+                        divert_point_id = line_points[0]
+                    if dest:
+                        if divert_destination is None:
+                            divert_destination = dest
+                        if dest not in divert_destinations:
+                            divert_destinations.append(dest)
+                    corridor_action_lines.append(line_strip)
             elif line_points:
                 for pid in line_points:
                     if pid not in points_found:
@@ -673,6 +801,19 @@ class MessageNormalizer:
             if line_is_explosion and (is_corridor_line or not has_distant):
                 explosion_detected = True
                 corridor_action_lines.append(line_strip)
+
+        # Deduplicate identical coarse contextual missile buckets within the same multi-line digest
+        # so 4 lines in Khmelnytskyi don't spawn 4 separate identical Level 1 alerts at once.
+        coarse_missile_buckets = {"khmelnytskyi_missile", "ternopil_missile", "lviv_missile"}
+        deduped_groups: list[list[str]] = []
+        seen_coarse_buckets: set[str] = set()
+        for grp in point_groups:
+            if len(grp) == 1 and grp[0] in coarse_missile_buckets:
+                if grp[0] in seen_coarse_buckets:
+                    continue
+                seen_coarse_buckets.add(grp[0])
+            deduped_groups.append(grp)
+        point_groups = deduped_groups
 
         # 3. Determine overall action
         # If an active corridor point is still reported on another line, keep tracking the active drone;
@@ -720,15 +861,25 @@ class MessageNormalizer:
 
         # 5. Determine drone type and context inheritance on corridor-relevant text
         norm_target_text = normalize(search_target_text)
-        explicit_missile = bool(_MISSILE_KW_RE.search(norm_target_text))
+        has_general_drone = bool(_GENERAL_DRONE_RE.search(norm_target_text))
         explicit_conventional = bool(_CONVENTIONAL_KW_RE.search(norm_target_text))
         explicit_jet = any(kw.lower() in norm_target_text for kw in ref.target_keywords) or bool(
-            not explicit_missile
+            not bool(_MISSILE_KW_RE.search(norm_target_text))
             and not explicit_conventional
+            and not has_general_drone
             and _IF_THREAT_WARNING_RE.search(norm_target_text)
             and _REMOTE_OBLAST_FOR_IF_THREAT_RE.search(norm_target_text)
         )
-        has_general_drone = bool(_GENERAL_DRONE_RE.search(norm_target_text))
+        explicit_missile = bool(
+            _MISSILE_KW_RE.search(norm_target_text)
+            or (
+                post_has_explicit_missile
+                and not post_has_explicit_jet
+                and not explicit_jet
+                and not explicit_conventional
+                and not has_general_drone
+            )
+        )
         has_corridor_activity = bool(
             points_found or action != ActionType.NONE or _CORRIDOR_REGION_RE.search(norm_target_text)
         )

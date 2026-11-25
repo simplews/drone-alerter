@@ -195,6 +195,10 @@ class Application:
                     cleanup_counter = 0
                     if self.subscriber_repo:
                         self.subscriber_repo.cleanup_old_target_messages(max_age_hours=24)
+                    if self.learning_store:
+                        purged = self.learning_store.purge_posts(older_than_days=14)
+                        if purged:
+                            logger.info("Очищено %d застарілих постів (>14 днів) із learning.db", purged)
             except asyncio.CancelledError:
                 break
             except Exception:

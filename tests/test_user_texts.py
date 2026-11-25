@@ -159,8 +159,8 @@ class TestUserTextsInvariants(unittest.IsolatedAsyncioTestCase):
         timeout_time3 = target3.eta_window_end_utc + timedelta(minutes=5)
         alerts3 = tracker3.check_timeouts(now=timeout_time3)
         self.assertEqual(len(alerts3), 1)
-        self.assertEqual(alerts3[0].title, "Ціль змінила курс / втрачена / знищена")
-        self.assertIn("впала або була збита", alerts3[0].body)
+        self.assertEqual(alerts3[0].title, "Ціль змінила курс або втрачена")
+        self.assertIn("уражена/втрачена", alerts3[0].body)
         self.assertIn("однак загроза може повторитися", alerts3[0].body)
 
     def test_regional_alert_does_not_claim_100_percent(self):
