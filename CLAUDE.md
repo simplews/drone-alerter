@@ -89,6 +89,5 @@ The repository is public or can become public. Everyone can see each commit. Git
 - Do not commit, push or merge without a direct instruction from the owner. An AI agent can create a branch, commit to it, and push that branch. An AI agent must not push to `master` and must not merge.
 
 ## Known issues
-- Links in `README.md` point to an old path `/Users/.../antigravity/kind-bose/`. The links are obsolete.
 - The danger levels in `README.md` and `docs/PRD.md` differ in some places (Tovste, Chernelytsia). Verify them against `src/engine/eta.py`.
 - `SECURITY.md` is the vulnerability-reporting policy. The owner must add the contact.

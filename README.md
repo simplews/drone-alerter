@@ -93,7 +93,7 @@ docker compose up -d
 curl http://localhost:8080/health
 ```
 
-Детальніше про безкоштовне розгортання на Oracle Cloud Always Free або Koyeb див. у [docs/DEPLOYMENT.md](file:///Users/andriyozorovych/Documents/antigravity/kind-bose/docs/DEPLOYMENT.md).
+Детальніше про безкоштовне розгортання на Oracle Cloud Always Free або Koyeb див. у [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
