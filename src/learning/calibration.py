@@ -60,7 +60,7 @@ def fit_speed(observations: list[ArrivalObservation], points: dict[str, PointRef
     speeds = []
     for obs in observations:
         point = points.get(obs.point_id)
-        if point and point.distance_km and obs.minutes_to_arrival > 0:
+        if point and not point.is_regional and not point.is_contextual and point.distance_km and obs.minutes_to_arrival > 0:
             speeds.append(point.distance_km / (obs.minutes_to_arrival / 60))
     if len(speeds) < cfg.min_speed_obs:
         return None

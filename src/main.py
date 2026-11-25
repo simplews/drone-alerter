@@ -62,7 +62,11 @@ class Application:
         self.tracker = TargetTracker(
             self.ref_cache,
             store=self.learning_store,
-            is_siren_active_fn=lambda: bool(self.siren_service and self.siren_service.get_current_state().is_active),
+            is_siren_active_fn=lambda: bool(
+                self.siren_service
+                and (st := self.siren_service.get_current_state())
+                and st.is_active
+            ),
         )
 
         # 3. Official air-raid alert service
@@ -102,6 +106,8 @@ class Application:
                 on_post=self.on_telegram_post,
                 on_connection_lost=self.on_connection_lost,
                 on_connection_restored=self.on_connection_restored,
+                is_outage=lambda: self.subscriber_repo.get_state("listener_outage") == "1",
+                set_outage=lambda val: self.subscriber_repo.set_state("listener_outage", "1" if val else "0"),
             )
         else:
             logger.warning("TELETHON_API_ID / HASH не задано. Читання каналів вимкнено.")
@@ -130,20 +136,22 @@ class Application:
                 await broadcast_alert(self.bot, self.subscriber_repo, alert)
 
     async def on_connection_lost(self) -> None:
-        logger.warning("Відправка системного попередження підписникам про втрату зв'язку...")
+        logger.warning("Відправка системного попередження підписникам про втрату звʼязку...")
         if self.bot:
             warning = (
-                "⚠️ **УВАГА: Тимчасовий збій моніторингу**\n\n"
-                "Втрачено з'єднання зі слухачем каналів. "
-                "Автоматичні сповіщення тимчасово не надходять.\n"
-                "Будь ласка, орієнтуйтеся на офіційну тривогу та повідомлення ОВА."
+                "⚠️ **УВАГА: тимчасовий збій моніторингу**\n\n"
+                "Втрачено звʼязок зі слухачем каналів, автоматичні сповіщення тимчасово не надходять.\n"
+                "Орієнтуйтеся на офіційну тривогу та повідомлення ОВА."
             )
             await broadcast_system_warning(self.bot, self.subscriber_repo, warning)
 
     async def on_connection_restored(self) -> None:
-        logger.info("Відправка повідомлення про відновлення зв'язку...")
+        logger.info("Відправка повідомлення про відновлення звʼязку...")
         if self.bot:
-            msg = "🟢 **З'єднання з моніторингом відновлено.** Система працює в штатному режимі."
+            msg = (
+                "🟢 **Звʼязок із моніторингом відновлено.** Система працює в штатному режимі.\n"
+                "Сповіщення за час збою могли бути пропущені."
+            )
             await broadcast_system_warning(self.bot, self.subscriber_repo, msg)
 
     async def on_siren_start(self, state: SirenState) -> None:
@@ -166,21 +174,27 @@ class Application:
             region_text = get_profile().texts.get("region_loc", state.region)
             title = "🟢 **ВІДБІЙ ПОВІТРЯНОЇ ТРИВОГИ**"
             body = (
-                f"В **{region_text}** оголошено відбій повітряної тривоги (о {time_str}).\n\n"
-                f"Загроза минула. Будьте уважні та бережіть себе!"
+                f"За офіційними даними, в **{region_text}** оголошено відбій (о {time_str}).\n"
+                "Залишайтеся уважними: нові цілі можливі. Слідкуйте за повідомленнями ОВА та Повітряних сил."
             )
             await broadcast_siren_event(self.bot, self.subscriber_repo, title, body, is_silent=False)
 
     async def _timeouts_loop(self) -> None:
         """Periodically check for expired targets and broadcast alerts if any."""
+        cleanup_counter = 0
         while True:
             await asyncio.sleep(15.0)
+            cleanup_counter += 1
             try:
                 alerts = self.tracker.check_timeouts()
                 for alert in alerts:
                     logger.info(f"🚨 [ТАЙМАУТ/СПОЗВІЩЕННЯ] {alert.title} (ціль={alert.target_id})")
                     if self.bot:
                         await broadcast_alert(self.bot, self.subscriber_repo, alert)
+                if cleanup_counter >= 240:  # ~1 hour
+                    cleanup_counter = 0
+                    if self.subscriber_repo:
+                        self.subscriber_repo.cleanup_old_target_messages(max_age_hours=24)
             except asyncio.CancelledError:
                 break
             except Exception:

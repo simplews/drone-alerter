@@ -60,8 +60,20 @@ def format_place_title(text: str) -> str:
         return "Муровані Кирилівці"
 
     words = text.split()
+    lowercase_tokens = {
+        "на", "в", "у", "з", "із", "зі", "до", "по", "біля", "над", "під", "між", "повз", "через",
+        "(курс", "(ракетний", "коридор)",
+    }
+    uppercase_tokens = {"іф", "іф)", "(іф)"}
     formatted_words = []
-    for word in words:
+    for idx, word in enumerate(words):
+        w_low = word.lower()
+        if w_low in uppercase_tokens:
+            formatted_words.append(word.upper())
+            continue
+        if idx > 0 and w_low in lowercase_tokens:
+            formatted_words.append(w_low)
+            continue
         parts = word.split("-")
         formatted_parts = [p[:1].upper() + p[1:] if p else "" for p in parts]
         formatted_words.append("-".join(formatted_parts))

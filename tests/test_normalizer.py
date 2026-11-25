@@ -248,7 +248,473 @@ class TestMessageNormalizer(unittest.TestCase):
         parsed = self.normalizer.parse(post)
         self.assertEqual(parsed.points, ["kamianets_podilskyi"])
 
+    def test_markdown_bold_distant_section_header_ignored(self):
+        # **Кіровоградщина:** with trailing ** must be recognized as a distant section header
+        # so "БпЛА курсом на Камʼянець" (Novhorodka in Kirovohrad region) does NOT trigger Kamianets-Podilskyi
+        text = (
+            "**Київ:**\n"
+            "Реактивний БпЛА над містом\n\n"
+            "**Кіровоградщина:**\n"
+            "БпЛА курсом на Камʼянець\n"
+            "2х Реактивні БпЛА курсом на Павлиш"
+        )
+        post = RawPost("kudy_letyt", 123797, text, T0)
+        parsed = self.normalizer.parse(post)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
+    def test_locative_region_and_northern_track_not_parsed_as_corridor_divert(self):
+        # "на Рівненщині" / "на Тернопільщині" (locative) and northern-track messages must not trigger DIVERTED
+        for idx, msg in enumerate([
+            "📡Дорозвідка на Рівненщині!",
+            "Реактивний БпЛА повз Степань на Рівненщині",
+            "🏍 Реактивний БпЛА на заході Рівненщини, курс на Волинь.",
+            "🏍 Реактивний БпЛА з півночі Хмельниччини на Рівненщину.",
+            "Пішла все-таки на Волинь, Колки/Ківерці",
+            "**Рівненщина:**\nРеактивний БпЛА повз Городок залітає на Рівне",
+        ]):
+            post = RawPost("monitoring_zaxid", 28100 + idx, msg, T0)
+            parsed = self.normalizer.parse(post)
+            self.assertEqual(parsed.points, [], msg)
+            self.assertNotEqual(parsed.action, ActionType.DIVERTED, msg)
+
+    def test_preventive_and_section_header_reconnaissance_not_active_points(self):
+        # "**Коломия:**\nДорозвідка по БпЛА" and "Калуський район ... превентивано" must not trigger active points
+        p1 = RawPost("kudy_letyt", 123399, "**Коломия:**\nДорозвідка по БпЛА", T0)
+        parsed1 = self.normalizer.parse(p1)
+        self.assertEqual(parsed1.points, [])
+        self.assertEqual(parsed1.action, ActionType.CLEAR)
+
+        p2 = RawPost(
+            "monitoring_zaxid",
+            28141,
+            "Калуський район Франківщини - дронова небезпека превентивано. В регіоні триває дорозвідка!",
+            T0,
+        )
+        parsed2 = self.normalizer.parse(p2)
+        self.assertEqual(parsed2.points, [])
+        self.assertEqual(parsed2.action, ActionType.CLEAR)
+
+    def test_lost_fixation_and_defense_forces_engagement_actions(self):
+        # "Втрата фіксації цілі поблизу Коломиї" -> LOST at kolomyia
+        p_lost = RawPost("monitoring_zaxid", 28025, "📡Втрата фіксації цілі поблизу Коломиї, деталі від офіційних осіб.", T0)
+        parsed_lost = self.normalizer.parse(p_lost)
+        self.assertEqual(parsed_lost.points, [])
+        self.assertEqual(parsed_lost.action, ActionType.LOST)
+        self.assertEqual(parsed_lost.action_point_id, "kolomyia")
+
+        # "по тому, котрий летів на Нову Ушицю - працювали сили оборони" -> DOWNED at nova_ushytsia
+        p_down = RawPost(
+            "monitoring_zaxid",
+            28071,
+            "Рівненщина:\n1 реактивна герань на Дубно\n\nХмельниччина - дорозвідка, по тому, котрий летів на Нову Ушицю - працювали сили оборони",
+            T0,
+        )
+        parsed_down = self.normalizer.parse(p_down)
+        self.assertEqual(parsed_down.points, [])
+        self.assertEqual(parsed_down.action, ActionType.DOWNED)
+        self.assertEqual(parsed_down.action_point_id, "nova_ushytsia")
+
+    def test_daily_summary_ignored(self):
+        p_sum = RawPost("kpszsu", 87000, "⚡️ ЗБИТО/ПОДАВЛЕНО 536 ВОРОЖИХ БПЛА", T0)
+        parsed = self.normalizer.parse(p_sum)
+        self.assertEqual(parsed.points, [])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
+    def test_pudlivtsi_corridor_point(self):
+        post = RawPost("kudy_letyt", 124001, "Хмельниччина:\nРеактивний БпЛА курсом на Пудлівці", T0)
+        parsed = self.normalizer.parse(post)
+        self.assertTrue(parsed.is_jet)
+        self.assertEqual(parsed.points, ["pudlivtsi"])
+        self.assertEqual(parsed.action, ActionType.NONE)
+
+    def test_cruise_missile_kh101_and_kalibr_parsing(self):
+        # 1. Explicit Х-101 group
+        p_kh101 = RawPost("kpszsu", 90001, "🚀 3х КР Х-101 через Нову Ушицю в напрямку Дунаївців", T0)
+        parsed_kh101 = self.normalizer.parse(p_kh101)
+        self.assertEqual(parsed_kh101.drone_type, DroneType.MISSILE)
+        self.assertEqual(parsed_kh101.target_type, "КР Х-101")
+        self.assertEqual(parsed_kh101.count, 3)
+        self.assertTrue(parsed_kh101.explicit_count)
+        self.assertEqual(parsed_kh101.points, ["nova_ushytsia", "dunaivtsi"])
+
+        # 2. Explicit Kalibr
+        p_kalibr = RawPost("monitoring_zaxid", 90002, "2 Калібри повз Камʼянець-Подільський на Городенку", T0)
+        parsed_kalibr = self.normalizer.parse(p_kalibr)
+        self.assertEqual(parsed_kalibr.drone_type, DroneType.MISSILE)
+        self.assertEqual(parsed_kalibr.target_type, "КР Калібр")
+        self.assertEqual(parsed_kalibr.count, 2)
+        self.assertEqual(parsed_kalibr.points, ["kamianets_podilskyi", "horodenka"])
+
+        # 3. Follow-up in same channel without keyword inherits MISSILE context
+        p_follow = RawPost("monitoring_zaxid", 90003, "Курсом на Бурштин!", T0 + timedelta(minutes=2))
+        parsed_follow = self.normalizer.parse(p_follow)
+        self.assertEqual(parsed_follow.drone_type, DroneType.MISSILE)
+        self.assertEqual(parsed_follow.target_type, "КР Калібр")
+        self.assertEqual(parsed_follow.points, ["burshtyn"])
+
+    def test_missed_if_course_and_corridor_examples(self):
+        # 1. 28000 -> 28002 (Bukovyna: Kelmentsi -> IF raion drone danger on Bukovyna)
+        p_28000 = RawPost("monitoring_zaxid", 28000, "Буковина:\n1 реактивна герань на Кельменці", T0)
+        res_28000 = self.normalizer.parse(p_28000)
+        self.assertTrue(res_28000.is_jet)
+        self.assertEqual(res_28000.points, ["kelmentsi"])
+        self.assertEqual(res_28000.action, ActionType.NONE)
+
+        p_28002 = RawPost(
+            "monitoring_zaxid",
+            28002,
+            "Івано-франківський район - дронова небезпека по реактиву на Буковині із західним курсом",
+            T0 + timedelta(seconds=50),
+        )
+        res_28002 = self.normalizer.parse(p_28002)
+        self.assertTrue(res_28002.is_jet)
+        self.assertEqual(res_28002.points, ["bukovyna_if_course"])
+        self.assertEqual(res_28002.action, ActionType.NONE)
+
+        # 2. 28309 -> 28310 -> 28312 (Martynivka/Buchach -> IF raion danger on Ternopil -> Pidvertaie na Frankivsk)
+        t_ep2 = T0 + timedelta(hours=1)
+        p_28309 = RawPost(
+            "monitoring_zaxid",
+            28309,
+            "Тернопільська область:\n1 реактивна герань поблизу Чорткова, курс на Мартинівку",
+            t_ep2,
+        )
+        res_28309 = self.normalizer.parse(p_28309)
+        self.assertTrue(res_28309.is_jet)
+        self.assertEqual(res_28309.points, ["chortkiv", "buchach"])
+        self.assertEqual(res_28309.action, ActionType.NONE)
+
+        p_28310 = RawPost(
+            "monitoring_zaxid",
+            28310,
+            "Івано-Франківський район - дронова небезпека по реактиву на Тернопільщині",
+            t_ep2 + timedelta(seconds=37),
+        )
+        res_28310 = self.normalizer.parse(p_28310)
+        self.assertTrue(res_28310.is_jet)
+        self.assertEqual(res_28310.points, ["ternopil_if_course"])
+        self.assertEqual(res_28310.action, ActionType.NONE)
+
+        p_28312 = RawPost(
+            "monitoring_zaxid",
+            28312,
+            "Підвертає на Франківськ \n\n❗️",
+            t_ep2 + timedelta(seconds=74),
+        )
+        res_28312 = self.normalizer.parse(p_28312)
+        self.assertTrue(res_28312.is_jet)
+        self.assertEqual(res_28312.points, ["if_direct_course"])
+        self.assertEqual(res_28312.action, ActionType.NONE)
+
+        # 3. 28346 -> 28348 (Drone danger in IF, nearest target towards Skala-Podilska)
+        t_ep3 = T0 + timedelta(hours=2)
+        p_28346 = RawPost(
+            "monitoring_zaxid",
+            28346,
+            "Оголошено дронову небезпеку в Івано-франківську. Найближча ціль у бік Скали-Подільської, Тернопільщина",
+            t_ep3,
+        )
+        res_28346 = self.normalizer.parse(p_28346)
+        self.assertTrue(res_28346.is_jet)
+        self.assertEqual(res_28346.points, ["skala_podilska"])
+        self.assertEqual(res_28346.action, ActionType.NONE)
+
+        p_28348 = RawPost(
+            "monitoring_zaxid",
+            28348,
+            "1 реактивна герань на Скалу-П./Товсте",
+            t_ep3 + timedelta(minutes=2),
+        )
+        res_28348 = self.normalizer.parse(p_28348)
+        self.assertTrue(res_28348.is_jet)
+        self.assertEqual(res_28348.points, ["skala_podilska", "tovste"])
+
+        # 4. 28452 -> 28456 -> 124290 -> 28458 (Parenthetical preventive, south Ternopil towards IF, Tlumach)
+        t_ep4 = T0 + timedelta(hours=3)
+        p_28452 = RawPost(
+            "monitoring_zaxid",
+            28452,
+            "Хмельниччина:\n1 реактивна герань на Камʼянець-Подільський (тривога в ІФ превентивна)",
+            t_ep4,
+        )
+        res_28452 = self.normalizer.parse(p_28452)
+        self.assertTrue(res_28452.is_jet)
+        self.assertEqual(res_28452.points, ["kamianets_podilskyi"])
+        self.assertEqual(res_28452.action, ActionType.NONE)
+
+        p_28456 = RawPost(
+            "monitoring_zaxid",
+            28456,
+            "1 реактивний на півдні Тернопільщини, рухається стандартним курсом у бік Франківська. Про наближення повідомлю",
+            t_ep4 + timedelta(minutes=8),
+        )
+        res_28456 = self.normalizer.parse(p_28456)
+        self.assertTrue(res_28456.is_jet)
+        self.assertEqual(res_28456.points, ["ternopil_if_course"])
+        self.assertEqual(res_28456.action, ActionType.NONE)
+
+        p_124290 = RawPost(
+            "kudy_letyt",
+            124290,
+            "Реактивний БпЛА курсом на Рівне \nРеактивний БпЛА курсом на Івано-Франківськ",
+            t_ep4 + timedelta(minutes=9, seconds=30),
+        )
+        res_124290 = self.normalizer.parse(p_124290)
+        self.assertTrue(res_124290.is_jet)
+        self.assertEqual(res_124290.points, ["if_direct_course"])
+        self.assertEqual(res_124290.action, ActionType.NONE)
+
+        p_28458 = RawPost(
+            "monitoring_zaxid",
+            28458,
+            "Франківськ - уважно, він уже біля Тлумача",
+            t_ep4 + timedelta(minutes=13),
+        )
+        res_28458 = self.normalizer.parse(p_28458)
+        self.assertTrue(res_28458.is_jet)
+        self.assertEqual(res_28458.points, ["tlumach"])
+        self.assertEqual(res_28458.action, ActionType.NONE)
+
+    def test_missile_corridors_lviv_khmelnytskyi_ternopil(self):
+        # For cruise missiles, directions to Khmelnytskyi, Ternopil, or Lviv are Level 1 corridors, NOT diversions
+        t_m = T0 + timedelta(hours=5)
+        p_khm = RawPost("kpszsu", 91001, "Група КР Х-101 курсом на Хмельницький", t_m)
+        res_khm = self.normalizer.parse(p_khm)
+        self.assertEqual(res_khm.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_khm.points, ["khmelnytskyi_missile"])
+        self.assertEqual(res_khm.action, ActionType.NONE)
+
+        p_ter = RawPost("monitoring_zaxid", 91002, "Калібри в напрямку Тернополя", t_m + timedelta(minutes=2))
+        res_ter = self.normalizer.parse(p_ter)
+        self.assertEqual(res_ter.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_ter.points, ["ternopil_missile"])
+        self.assertEqual(res_ter.action, ActionType.NONE)
+
+        p_lviv = RawPost("monitoring_zaxid", 91003, "Крилаті ракети змінили курс на Львів", t_m + timedelta(minutes=4))
+        res_lviv = self.normalizer.parse(p_lviv)
+        self.assertEqual(res_lviv.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_lviv.points, ["lviv_missile"])
+        self.assertEqual(res_lviv.action, ActionType.NONE)
+
+        p_if = RawPost("monitoring_zaxid", 91004, "Ракета повернула на Івано-Франківськ!", t_m + timedelta(minutes=6))
+        res_if = self.normalizer.parse(p_if)
+        self.assertEqual(res_if.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_if.points, ["if_direct_course"])
+        self.assertEqual(res_if.action, ActionType.NONE)
+
+    def test_raketa_dron_geran5_and_chornyi_ostriv_not_missile(self):
+        """Regression test for 2026-10-18 false cruise missile alert:
+        - 'ракета-дрон «Герань-5»' and 'Бандероль' must be classified as DroneType.JET, NOT DroneType.MISSILE.
+        - Follow-up 'Хмельницький: Чорний Острів повз західні околиці ❗️' must be parsed as DIVERTED
+          and must never synthesize 'khmelnytskyi_missile'.
+        - 'підлітає до Деражні' must be parsed as ActionType.DIVERTED.
+        """
+        t0 = datetime(2026, 10, 18, 19, 26, 33, tzinfo=UTC)
+        p_28673 = RawPost(
+            "monitoring_zaxid",
+            28673,
+            "За уточненою інформацією та порівнянням ТТХ, вдалось визначити, що на Вінниччині в напрямку Козятина рухається не «Бандероль», а ракета-дрон «Герань-5»",
+            t0,
+        )
+        res_28673 = self.normalizer.parse(p_28673)
+        self.assertEqual(res_28673.drone_type, DroneType.JET)
+        self.assertTrue(res_28673.is_jet)
+        self.assertEqual(res_28673.target_type, "Герань-5")
+        self.assertEqual(res_28673.points, [])
+
+        p_28676 = RawPost(
+            "monitoring_zaxid",
+            28676,
+            "Хмельниччина:\n1 реактивна герань поблизу Нової Ушиці, західний курс",
+            t0 + timedelta(minutes=4),
+        )
+        res_28676 = self.normalizer.parse(p_28676)
+        self.assertEqual(res_28676.drone_type, DroneType.JET)
+        self.assertEqual(res_28676.points, ["nova_ushytsia"])
+
+        p_28681 = RawPost(
+            "monitoring_zaxid",
+            28681,
+            "Хмельницький: Чорний Острів повз західні околиці ❗️",
+            t0 + timedelta(minutes=19, seconds=12),
+        )
+        res_28681 = self.normalizer.parse(p_28681)
+        self.assertNotEqual(res_28681.drone_type, DroneType.MISSILE)
+        self.assertEqual(res_28681.points, [])
+        self.assertEqual(res_28681.action, ActionType.NONE)
+
+        p_28682 = RawPost(
+            "monitoring_zaxid",
+            28682,
+            "Йде на/повз Красилів з курсом на північ ❗️",
+            t0 + timedelta(minutes=23, seconds=10),
+        )
+        res_28682 = self.normalizer.parse(p_28682)
+        self.assertEqual(res_28682.action, ActionType.DIVERTED)
+
+        p_der = RawPost("kudy_letyt", 124726, "Хмельниччина:\nБпЛА підлітає до Деражні", t0 + timedelta(minutes=25))
+        res_der = self.normalizer.parse(p_der)
+        self.assertEqual(res_der.action, ActionType.DIVERTED)
+        self.assertEqual(res_der.divert_destination, "Деражні")
+
+    def test_lisovi_hrynivtsi_and_cross_oblast_homonyms_do_not_trigger_tlumach(self):
+        """Regression test for 2026-10-19 false Level 3A Tlumach alerts (kudy_letyt/125261 & 125305):
+        - 'Лісові Гринівці' in Khmelnytskyi region must NEVER match 'tlumach' ('гринівці').
+        - 'Озеряни' in Ternopil region ('на Скалу-Подільську/Озеряни') must match only 'skala_podilska', NOT 'tlumach'.
+        - 'Гринівці' under '**Івано-Франківськ:**' DOES match 'tlumach'.
+        - Cross-oblast suburb homonyms ('Микитинці' under 'Хмельниччина:', 'Вовчинці' under 'Вінниччина:') must NOT match IF suburbs.
+        """
+        t0 = datetime(2026, 10, 19, 13, 14, 51, tzinfo=UTC)
+
+        # 1. Exact kudy_letyt/125261
+        p_125261 = RawPost(
+            "kudy_letyt",
+            125261,
+            "Хмельниччина:\nРеактивний БпЛА звернув на Лісові Гринівці",
+            t0,
+        )
+        res_125261 = self.normalizer.parse(p_125261)
+        self.assertEqual(res_125261.points, [])
+
+        # 2. Exact kudy_letyt/125267
+        p_125267 = RawPost(
+            "kudy_letyt",
+            125267,
+            "Хмельниччина:\nРеактивний БпЛА повз Меджибіж тримає курс на Лісові Гринівці",
+            t0 + timedelta(minutes=13),
+        )
+        res_125267 = self.normalizer.parse(p_125267)
+        self.assertEqual(res_125267.points, [])
+
+        # 3. Exact kudy_letyt/125305
+        p_125305 = RawPost(
+            "kudy_letyt",
+            125305,
+            "Хмельниччина:\nРеактивний БпЛА курсом на Лісові Гринівці",
+            t0 + timedelta(minutes=95),
+        )
+        res_125305 = self.normalizer.parse(p_125305)
+        self.assertEqual(res_125305.points, [])
+
+        # 4. Ternopil Ozeriany must not jump to Tlumach
+        p_ozer = RawPost(
+            "monitoring_zaxid",
+            28901,
+            "Тернопільщина:\n1 реактивна герань на Скалу-Подільську/Озеряни",
+            t0 + timedelta(minutes=100),
+        )
+        res_ozer = self.normalizer.parse(p_ozer)
+        self.assertEqual(res_ozer.points, ["skala_podilska"])
+
+        # 5. Real Hrynivtsi under Ivano-Frankivsk header DOES match tlumach
+        p_if_hryn = RawPost(
+            "kudy_letyt",
+            125999,
+            "**Івано-Франківськ:**\n2х Реактивні БпЛА курсом на Гринівці",
+            t0 + timedelta(minutes=110),
+        )
+        res_if_hryn = self.normalizer.parse(p_if_hryn)
+        self.assertEqual(res_if_hryn.points, ["tlumach"])
+        self.assertEqual(res_if_hryn.count, 2)
+
+        # 6. Cross-oblast suburb homonyms (Микитинці in Khmelnytskyi raion, Вовчинці in Vinnytsia oblast)
+        p_myk = RawPost("kudy_letyt", 126001, "Хмельниччина:\nРеактивний БпЛА курсом на Микитинці", t0 + timedelta(minutes=120))
+        self.assertEqual(self.normalizer.parse(p_myk).points, [])
+
+        p_vov = RawPost("kudy_letyt", 126002, "Вінниччина:\nРеактивний БпЛА курсом на Вовчинці", t0 + timedelta(minutes=125))
+        self.assertEqual(self.normalizer.parse(p_vov).points, [])
+
+    def test_airport_in_other_cities_does_not_trigger_ivano_frankivsk(self):
+        """Regression test for 2026-10-19/20 false Level 3B alerts caused by 'аеропорт' in other cities:
+        - 'Львів: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/125480) -> points=[]
+        - 'Хмельницький: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/125547, 125632) -> points=[]
+        - '‼️Хмельницький - уважно, реактивна герань у бік аеропорту!' (monitoring_zaxid/29047) -> points=[]
+        - 'Хмельницький: Реактивний БпЛА підлітає до аеропорту' (kudy_letyt/125598) -> points=[]
+        - 'Вінниця: Реактивний БпЛА курсом на Немирівський повз аеропорт' (kudy_letyt/123195) -> points=[]
+        - 'Рівне: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/123379) -> points=[]
+        - 'Івано-Франківськ: Реактивний БпЛА курсом на аеропорт' (kudy_letyt/123913) -> points=['ivano_frankivsk']
+        """
+        t0 = datetime(2026, 10, 19, 21, 13, 11, tzinfo=UTC)
+
+        non_if_airport_posts = [
+            (125480, "Львів:\nРеактивний БпЛА курсом на аеропорт"),
+            (125547, "Хмельницький:\nРеактивний БпЛА курсом на аеропорт"),
+            (29047, "‼️Хмельницький - уважно, реактивна герань у бік аеропорту!"),
+            (125598, "Хмельницький:\nРеактивний БпЛА підлітає до аеропорту"),
+            (123195, "Вінниця:\nРеактивний БпЛА курсом на Немирівський повз аеропорт"),
+            (123379, "Рівне:\nРеактивний БпЛА курсом на аеропорт"),
+            (28661, "Рівненщина:\n1 реактивна герань на аеропорт Рівне ‼️"),
+        ]
+        for idx, (mid, text) in enumerate(non_if_airport_posts):
+            p = RawPost("kudy_letyt", mid, text, t0 + timedelta(minutes=idx * 5))
+            res = self.normalizer.parse(p)
+            self.assertEqual(res.points, [], f"Expected no IF points for {text!r}, got {res.points}")
+
+        # Explicit Ivano-Frankivsk airport posts MUST still trigger 'ivano_frankivsk'
+        if_airport_posts = [
+            (123913, "Івано-Франківськ:\nРеактивний БпЛА курсом на аеропорт"),
+            (123927, "Івано-Франківськ:\nРеактивний БпЛА курсом на аеропорт (1км)"),
+            (124068, "Івано-Франківськ: реактивний БпЛА курсом на аеропорт"),
+            (124099, "Реактивний БпЛА на Франківськ (аеропорт)"),
+        ]
+        for idx, (mid, text) in enumerate(if_airport_posts):
+            p = RawPost("kudy_letyt", mid, text, t0 + timedelta(minutes=100 + idx * 5))
+            res = self.normalizer.parse(p)
+            self.assertEqual(res.points, ["ivano_frankivsk"], f"Expected ['ivano_frankivsk'] for {text!r}, got {res.points}")
+
+    def test_new_corridor_and_regional_points(self):
+        t0 = datetime(2026, 10, 21, 15, 0, 0, tzinfo=UTC)
+
+        # Chortkiv
+        p_chort = RawPost("kudy_letyt", 126101, "Тернопільщина:\nРеактивний БпЛА курсом на Чортків", t0)
+        res_chort = self.normalizer.parse(p_chort)
+        self.assertTrue(res_chort.is_jet)
+        self.assertEqual(res_chort.points, ["chortkiv"])
+        self.assertEqual(res_chort.action, ActionType.NONE)
+
+        # Zalishchyky
+        p_zal = RawPost("monitoring_zaxid", 29501, "Тернопільщина:\n1 реактивна герань на Заліщики", t0)
+        res_zal = self.normalizer.parse(p_zal)
+        self.assertTrue(res_zal.is_jet)
+        self.assertEqual(res_zal.points, ["zalishchyky"])
+        self.assertEqual(res_zal.action, ActionType.NONE)
+
+        # Regional IF points: Nadvirna, Sniatyn, Voinyliv
+        p_nad = RawPost("monitoring_zaxid", 29502, "Івано-Франківщина:\nРеактивний БпЛА курсом на Надвірну", t0)
+        res_nad = self.normalizer.parse(p_nad)
+        self.assertEqual(res_nad.points, ["nadvirna"])
+
+        p_sn = RawPost("kudy_letyt", 126102, "Франківщина:\nРеактивний БпЛА курсом на Снятин", t0)
+        res_sn = self.normalizer.parse(p_sn)
+        self.assertEqual(res_sn.points, ["sniatyn"])
+
+        p_voin = RawPost("kudy_letyt", 126103, "Франківщина:\nРеактивний БпЛА курсом на Войнилів", t0)
+        res_voin = self.normalizer.parse(p_voin)
+        self.assertEqual(res_voin.points, ["voinyliv"])
+
+        # Dolyna in IF
+        p_dol = RawPost("kudy_letyt", 126104, "Франківщина:\nРеактивний БпЛА курсом на Долину", t0)
+        res_dol = self.normalizer.parse(p_dol)
+        self.assertEqual(res_dol.points, ["dolyna"])
+
+        # Dolyna homonym guards: Lypova Dolyna (Sumy) & Dolynska (Kirovohrad) must NOT match dolyna
+        p_lyp = RawPost("kudy_letyt", 126105, "Сумщина:\nРеактивний БпЛА курсом на Липову Долину", t0)
+        self.assertEqual(self.normalizer.parse(p_lyp).points, [])
+
+        p_dols = RawPost("kudy_letyt", 126106, "Кіровоградщина:\nРеактивний БпЛА курсом на Долинську", t0)
+        self.assertEqual(self.normalizer.parse(p_dols).points, [])
+
+        # Stryi diversion
+        p_stryi = RawPost("kudy_letyt", 126107, "Львівщина:\nРеактивний БпЛА курсом на Стрий povz Войнилів", t0)
+        res_stryi = self.normalizer.parse(p_stryi)
+        self.assertEqual(res_stryi.action, ActionType.DIVERTED)
+        self.assertIn("Стрий", res_stryi.divert_destinations)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
 

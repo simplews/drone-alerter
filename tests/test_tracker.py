@@ -77,7 +77,7 @@ class TestTargetTracker(unittest.TestCase):
 
 
     def test_multi_target_decrement_on_downed(self):
-        # 2 targets to Tlumach
+        # 1. Without active siren (default in self.tracker)
         p1 = RawPost("chan_a", 20, "2х Реактивні БпЛА через Тлумач", T0)
         alerts1 = self.tracker.process_message(p1, self.normalizer.parse(p1), now=T0)
         self.assertEqual(len(alerts1), 1)
@@ -85,22 +85,40 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0].target_count, 2)
 
-        # Message about a shoot-down of one target
+        # Message about a shoot-down of one target (no siren active)
         p2 = RawPost("chan_a", 21, "Біля Тлумача одну збито!", T0 + timedelta(minutes=2))
         alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=T0 + timedelta(minutes=2))
         self.assertEqual(len(alerts2), 1)
-        self.assertIn("ще 1 ціль(і) у повітрі", alerts2[0].body)
+        self.assertIn("Ще 1 ціль(і) може бути в повітрі", alerts2[0].body)
+        self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її буде оголошено", alerts2[0].body)
+        self.assertNotIn("до офіційного відбою", alerts2[0].body)
         # The target stays active!
         self.assertEqual(targets[0].status, TargetStatus.ACTIVE)
         self.assertEqual(targets[0].target_count, 1)
 
-        # Shoot-down of the last target
+        # Shoot-down of the last target (no siren active)
         p3 = RawPost("chan_a", 22, "Другу також збили біля Тлумача", T0 + timedelta(minutes=4))
         alerts3 = self.tracker.process_message(p3, self.normalizer.parse(p3), now=T0 + timedelta(minutes=4))
         self.assertEqual(len(alerts3), 1)
         self.assertEqual(targets[0].status, TargetStatus.PROBABLY_DOWNED)
         self.assertIn("імовірно, уражена або втрачена", alerts3[0].body)
-        self.assertIn("до офіційного відбою", alerts3[0].body)
+        self.assertIn("не ігноруйте сигнали повітряної тривоги, якщо її все ж буде оголошено", alerts3[0].body)
+        self.assertNotIn("до офіційного відбою", alerts3[0].body)
+
+        # 2. With active siren
+        tracker_siren = TargetTracker(self.cache, is_siren_active_fn=lambda: True)
+        p4 = RawPost("chan_a", 23, "2х Реактивні БпЛА через Тлумач", T0)
+        tracker_siren.process_message(p4, self.normalizer.parse(p4), now=T0)
+
+        p5 = RawPost("chan_a", 24, "Біля Тлумача одну збито!", T0 + timedelta(minutes=2))
+        alerts5 = tracker_siren.process_message(p5, self.normalizer.parse(p5), now=T0 + timedelta(minutes=2))
+        self.assertEqual(len(alerts5), 1)
+        self.assertIn("Залишайтеся в укриттях до офіційного відбою", alerts5[0].body)
+
+        p6 = RawPost("chan_a", 25, "Другу також збили біля Тлумача", T0 + timedelta(minutes=4))
+        alerts6 = tracker_siren.process_message(p6, self.normalizer.parse(p6), now=T0 + timedelta(minutes=4))
+        self.assertEqual(len(alerts6), 1)
+        self.assertIn("Це не скасування тривоги: залишайтеся в укриттях до офіційного відбою ОВА/ПС.", alerts6[0].body)
 
     def test_cross_channel_deduplication(self):
         # Channel A: Borshchiv at 21:30
@@ -195,9 +213,9 @@ class TestTargetTracker(unittest.TestCase):
         after_end = target.eta_window_end_utc + timedelta(seconds=10)
         timeout_alerts = tracker.check_timeouts(now=after_end)
         self.assertEqual(len(timeout_alerts), 1)
-        self.assertEqual(timeout_alerts[0].title, "Ціль локаційно втрачена")
-        self.assertIn("Можливо локаційно втрачена", timeout_alerts[0].body)
-        self.assertIn("Слідкуйте за подальшими повідомленнями", timeout_alerts[0].body)
+        self.assertEqual(timeout_alerts[0].title, "Ціль змінила курс / втрачена")
+        self.assertIn("Імовірно, змінила курс або втрачена", timeout_alerts[0].body)
+        self.assertIn("однак загроза може повторитися", timeout_alerts[0].body)
         self.assertEqual(target.status, TargetStatus.LOST)
         self.assertEqual(len(tracker.get_active_targets()), 0)
 
@@ -421,11 +439,17 @@ class TestTargetTracker(unittest.TestCase):
         p_div = RawPost("kudy_letyt", 405, "Хмельниччина:\nРеактивний БпЛА повз Дунаївці курсом на Городок", t_div)
         alerts_div = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_div)
 
-        self.assertEqual(len(alerts_div), 1)
-        self.assertEqual(alerts_div[0].title, "Ціль змінила курс")
-        self.assertIn("Дунаївці", alerts_div[0].body)
-        self.assertIn("Городок", alerts_div[0].body)
-        self.assertNotIn("Тисмениця", alerts_div[0].body)
+        div_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс"]
+        self.assertEqual(len(div_alerts), 1)
+        self.assertEqual(div_alerts[0].title, "Ціль змінила курс")
+        self.assertIn("Дунаївці", div_alerts[0].body)
+        self.assertIn("Городок", div_alerts[0].body)
+        self.assertNotIn("Тисмениця", div_alerts[0].body)
+
+        # Target 1 (Tysmenytsia) ETA expired by 15:24, so it emitted a timeout alert
+        t1_timeout_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс / втрачена / знищена"]
+        self.assertEqual(len(t1_timeout_alerts), 1)
+        self.assertIn("впала або була збита", t1_timeout_alerts[0].body)
 
     def test_conventional_shahed_eta_and_title(self):
         # Conventional Shahed reported at Nova Ushytsia (187 km)
@@ -467,8 +491,8 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alert.level, AlertLevel.REGIONAL)
         self.assertTrue(alert.is_silent)
         self.assertIn("Рух у напрямку Коломиї", alert.title)
-        self.assertIn("~55 км від ІФ", alert.title)
-        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+        self.assertIn("~55 км від Франківська", alert.title)
+        self.assertIn("Найімовірніше, в області буде оголошено тривогу.", alert.body)
 
     def test_regional_alert_bohorodchany_loud(self):
         # Bohorodchany (18 km, <=30 km -> loud push)
@@ -479,8 +503,22 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(alert.level, AlertLevel.REGIONAL)
         self.assertFalse(alert.is_silent)
         self.assertIn("Рух у напрямку Богородчан", alert.title)
-        self.assertIn("~18 км від ІФ", alert.title)
-        self.assertIn("Ймовірна повітряна тривога в області (~100%)", alert.body)
+        self.assertIn("~18 км від Франківська", alert.title)
+        self.assertIn("Найімовірніше, в області буде оголошено тривогу.", alert.body)
+
+    def test_regional_alert_with_active_siren(self):
+        tracker_siren = TargetTracker(self.cache, is_siren_active_fn=lambda: True)
+        p = RawPost("kudy_letyt", 7021, "Реактивний БпЛА на Калуш", T0)
+        alerts = tracker_siren.process_message(p, self.normalizer.parse(p), now=T0)
+        self.assertEqual(len(alerts), 1)
+        alert = alerts[0]
+        self.assertEqual(alert.level, AlertLevel.REGIONAL)
+        self.assertIn("Рух у напрямку Калуша", alert.title)
+        self.assertIn("Загроза в області", alert.title)
+        self.assertNotIn("Ймовірна тривога в області", alert.title)
+        self.assertIn("В області триває повітряна тривога.", alert.body)
+        self.assertIn("Залишайтеся в укриттях до офіційного відбою", alert.body)
+        self.assertNotIn("буде оголошено тривогу", alert.body)
 
     def test_regional_escalation_to_level_3a(self):
         # 1. Target at Kolomyia (regional)
@@ -558,8 +596,497 @@ class TestTargetTracker(unittest.TestCase):
         broadcast_alerts = [a for a in alerts if not a.is_update]
         self.assertEqual(len(broadcast_alerts), 0)
 
+        targets = self.tracker.get_active_targets()
+        self.assertEqual(len(targets), 1)
+        self.assertFalse(targets[0].alerted)
+
+        # Subsequent timeout must NOT emit an alert to subscribers for an unalerted target
+        after_eta = targets[0].eta_window_end_utc + timedelta(minutes=10)
+        timeout_alerts = self.tracker.check_timeouts(now=after_eta)
+        self.assertEqual(len(timeout_alerts), 0)
+        self.assertEqual(targets[0].status, TargetStatus.LOST)
+
+        # Subsequent action must also NOT emit an alert to subscribers for an unalerted target
+        t_action = t_received + timedelta(minutes=2)
+        p_fresh = RawPost("chan_a", 28070, "Реактивний БпЛА біля Дунаївців", t_action)
+        # Create fresh target but with stale delay
+        alerts_stale2 = self.tracker.process_message(p_fresh, self.normalizer.parse(p_fresh), now=t_action + timedelta(minutes=20))
+        self.assertEqual(len([a for a in alerts_stale2 if not a.is_update]), 0)
+        t_active = [t for t in self.tracker.get_active_targets() if not t.alerted]
+        self.assertGreaterEqual(len(t_active), 1)
+
+        p_div = RawPost("chan_a", 28071, "відвернув на Рівне", t_action + timedelta(minutes=3))
+        div_alerts = self.tracker.process_message(p_div, self.normalizer.parse(p_div), now=t_action + timedelta(minutes=3))
+        self.assertEqual(len(div_alerts), 0)
+
+    def test_simultaneous_two_waves_and_otynia_no_downgrade(self):
+        """Replicate tonight's 00:03-00:30 UTC two-wave attack:
+        - Wave 1 advances Nova Ushytsia -> Borshchiv -> Chernelytsia (Level 3A).
+        - In the same 00:03:59 digest, Wave 2 enters at Stara Ushytsia -> Kamianets-Podilskyi (Level 2).
+        - At 00:05:16, Otyniia (regional, 28 km) is reported: must NOT downgrade Wave 1 to REGIONAL or emit a regional alert.
+        - At 00:07:55, Tlumach (25 km) must match Wave 1 (Chernelytsia), NOT Wave 2 (Kamianets-Podilskyi).
+        - Northern-track posts ("на заході Рівненщини, курс на Волинь", "з півночі Хмельниччини на Рівненщину")
+          must NOT divert either wave.
+        """
+        t_w1_start = datetime(2026, 10, 15, 23, 55, 35, tzinfo=UTC)
+        p_w1_bor = RawPost("kudy_letyt", 123902, "**Тернопільщина:**\nРеактивний БпЛА курсом на Борщів", t_w1_bor := t_w1_start)
+        self.tracker.process_message(p_w1_bor, self.normalizer.parse(p_w1_bor), now=t_w1_bor)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Digest at 00:03:59 has both Wave 2 (Stara Ushytsia -> Kamianets) and Wave 1 (Chernelytsia)
+        t_digest = datetime(2026, 10, 16, 0, 3, 59, tzinfo=UTC)
+        digest_text = (
+            "**Тернопільщина:**\n"
+            "Реактивний БпЛА курсом на Шумськ\n\n"
+            "**Хмельниччина:**\n"
+            "Реактивний БпЛА залітає в область повз Стару Ушицю в бік Камʼянець-Подільського\n\n"
+            "**Франківщина:**\n"
+            "Реактивний БпЛА курсом на Івано-Франківськ повз Чернелицю"
+        )
+        p_digest = RawPost("kudy_letyt", 123904, digest_text, t_digest)
+        alerts_d = [a for a in self.tracker.process_message(p_digest, self.normalizer.parse(p_digest), now=t_digest) if not a.is_update]
+        self.assertEqual(len(alerts_d), 2)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        # At 00:05:16, Otyniia is reported -> matches Wave 1 (Level 3A) without downgrading to REGIONAL
+        t_oty = datetime(2026, 10, 16, 0, 5, 16, tzinfo=UTC)
+        p_oty = RawPost("kudy_letyt", 123905, "**Франківщина:**\nРеактивний БпЛА курсом на Отинію", t_oty)
+        alerts_oty = [a for a in self.tracker.process_message(p_oty, self.normalizer.parse(p_oty), now=t_oty) if not a.is_update]
+        self.assertEqual(len(alerts_oty), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        # At 00:07:55, Tlumach matches Wave 1 (not Wave 2 at Kamianets)
+        t_tlu = datetime(2026, 10, 16, 0, 7, 55, tzinfo=UTC)
+        p_tlu = RawPost("kudy_letyt", 123907, "Реактивний БпЛА повз Тлумач рухається в бік Івано-Франківська", t_tlu)
+        alerts_tlu = [a for a in self.tracker.process_message(p_tlu, self.normalizer.parse(p_tlu), now=t_tlu) if not a.is_update]
+        self.assertEqual(len(alerts_tlu), 1)
+        self.assertEqual(alerts_tlu[0].level, AlertLevel.LEVEL_3A)
+        self.assertIn("Тлумач", alerts_tlu[0].title)
+
+        # Northern-track post at 00:12:54 must NOT divert either wave
+        t_north = datetime(2026, 10, 16, 0, 12, 54, tzinfo=UTC)
+        p_north = RawPost("kpszsu", 87166, "🏍 Реактивний БпЛА на заході Рівненщини, курс на Волинь.", t_north)
+        alerts_n = self.tracker.process_message(p_north, self.normalizer.parse(p_north), now=t_north)
+        self.assertEqual(len(alerts_n), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+    def test_stage_aware_divert_selects_matching_oblast_destination(self):
+        """When a target is already at Skala-Podilska (110 km, Ternopil oblast),
+        a digest containing both 'на Вовковинці' (Khmelnytskyi) and 'на Копичинці' (Ternopil)
+        must divert the target to Kopychyntsi, while an upstream Shargorod/Derazhnia post must NOT divert it.
+        """
+        t1 = datetime(2026, 10, 15, 20, 35, 32, tzinfo=UTC)
+        p1 = RawPost("monitoring_zaxid", 28197, "Реактивний БпЛА рухається далі на Скалу-Подільську, Тернопільщина", t1)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Upstream Khmelnytskyi diversion to Derazhnia must NOT divert a target already in Ternopil oblast
+        t_der = t1 + timedelta(minutes=1)
+        p_der = RawPost("monitoring_zaxid", 28198, "Хмельниччина:\n1 реактивна герань на Деражню", t_der)
+        alerts_der = self.tracker.process_message(p_der, self.normalizer.parse(p_der), now=t_der)
+        self.assertEqual(len(alerts_der), 0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Multi-region digest with Vovkovyntsi + Kopychyntsi diverts Skala-Podilska to Kopychyntsi
+        t_kop = t1 + timedelta(minutes=2)
+        digest = (
+            "**Хмельниччина:**\n"
+            "Реактивний БпЛА курсом на Вовковинці\n\n"
+            "**Тернопільщина:**\n"
+            "Реактивний БпЛА курсом на Копичинці"
+        )
+        p_kop = RawPost("kudy_letyt", 123780, digest, t_kop)
+        alerts_kop = self.tracker.process_message(p_kop, self.normalizer.parse(p_kop), now=t_kop)
+        self.assertEqual(len(alerts_kop), 1)
+        self.assertIn("Копичинці", alerts_kop[0].body)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_single_line_multi_point_coalesces_to_single_alert(self):
+        # "1 реактивна герань поблизу Мурованих-Курилівців в бік Дунаївців" -> 1 coalesced alert at Dunaivtsi
+        p = RawPost("monitoring_zaxid", 28144, "1 реактивна герань поблизу Мурованих-Курилівців в бік Дунаївців", T0)
+        alerts = [a for a in self.tracker.process_message(p, self.normalizer.parse(p), now=T0) if not a.is_update]
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Дунаївці", alerts[0].title)
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].points_sequence, ["murovani_kyrylivtsi", "dunaivtsi"])
+
+    def test_reply_to_unrelated_post_and_unknown_divert_destination(self):
+        """Replicate 16 Oct 16:53 incident:
+        - Target active at Nova Ushytsia (kudy_letyt/124270)
+        - kudy_letyt/124283 reports drone in Volyn (Kovel -> Liuboml -> Yahodyn)
+        - kudy_letyt/124284 replies to 124283 with 'Відвернув на Головне'
+        Must NOT divert the Nova Ushytsia target (both with and without reply_to_message_id).
+        """
+        t0 = datetime(2026, 10, 16, 13, 45, 0, tzinfo=UTC)
+        p_target = RawPost("kudy_letyt", 124270, "Реактивний БпЛА на Нову Ушицю", t0)
+        self.tracker.process_message(p_target, self.normalizer.parse(p_target), now=t0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # Unrelated Volyn post
+        t1 = t0 + timedelta(minutes=6)
+        p_volyn = RawPost(
+            "kudy_letyt",
+            124283,
+            'Реактивний БпЛА пролетів Ковель повз Любомль курсом на Пункт пропуску для автомобільного сполучення "Ягодин"',
+            t1,
+        )
+        self.assertEqual(self.tracker.process_message(p_volyn, self.normalizer.parse(p_volyn), now=t1), [])
+
+        # 1. Reply to 124283: "Відвернув на Головне"
+        t2 = t0 + timedelta(minutes=8)
+        p_reply = RawPost("kudy_letyt", 124284, "Відвернув на Головне", t2, reply_to_message_id=124283)
+        alerts_reply = self.tracker.process_message(p_reply, self.normalizer.parse(p_reply), now=t2)
+        self.assertEqual(alerts_reply, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 2. Even without reply_to_message_id, an unknown destination outside corridor ("Відвернув на Олевськ")
+        # must NOT divert the Nova Ushytsia target
+        p_unknown = RawPost("kudy_letyt", 124285, "Відвернув на Олевськ", t2 + timedelta(seconds=30))
+        alerts_unknown = self.tracker.process_message(
+            p_unknown, self.normalizer.parse(p_unknown), now=t2 + timedelta(seconds=30)
+        )
+        self.assertEqual(alerts_unknown, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 3. Generic reply "Відвернув на північ" to unrelated 124283 must NOT divert 124270
+        p_generic_unrel = RawPost(
+            "kudy_letyt", 124286, "Відвернув на північ", t2 + timedelta(minutes=1), reply_to_message_id=124283
+        )
+        alerts_gen_unrel = self.tracker.process_message(
+            p_generic_unrel, self.normalizer.parse(p_generic_unrel), now=t2 + timedelta(minutes=1)
+        )
+        self.assertEqual(alerts_gen_unrel, [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        # 4. Reply to the actual target message (124270) with a valid corridor divert DOES divert it
+        p_valid_reply = RawPost(
+            "kudy_letyt", 124287, "Відвернув на північ", t2 + timedelta(minutes=2), reply_to_message_id=124270
+        )
+        alerts_valid = self.tracker.process_message(
+            p_valid_reply, self.normalizer.parse(p_valid_reply), now=t2 + timedelta(minutes=2)
+        )
+        self.assertEqual(len(alerts_valid), 1)
+        self.assertEqual(alerts_valid[0].title, "Ціль змінила курс")
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_cruise_missile_tracking_eta_and_regional_alerts(self):
+        """Cruise missiles (Х-101 / Калібр) are tracked separately from drones,
+        use 750–880 km/h speed for ETA, and format regional alerts appropriately.
+        """
+        t0 = datetime(2026, 10, 16, 4, 30, 0, tzinfo=UTC)
+
+        # 1. Active Shahed at Nova Ushytsia
+        p_shahed = RawPost("kudy_letyt", 5001, "БпЛА курсом на Нову Ушицю", t0)
+        self.tracker.process_message(p_shahed, self.normalizer.parse(p_shahed), now=t0)
+
+        # 2. Cruise missile Х-101 enters at Nova Ushytsia (must NOT merge with Shahed)
+        t1 = t0 + timedelta(minutes=1)
+        p_kh101 = RawPost("kpszsu", 5002, "🚀 Група КР Х-101 через Нову Ушицю", t1)
+        alerts_kh = self.tracker.process_message(p_kh101, self.normalizer.parse(p_kh101), now=t1)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+        self.assertEqual(len(alerts_kh), 1)
+        self.assertIn("(КР Х-101)", alerts_kh[0].title)
+
+        # Verify missile ETA from Nova Ushytsia (~190 km at 750-880 km/h -> ~14-21 min, much faster than jet/shahed)
+        missile_targets = [t for t in self.tracker.get_active_targets() if t.drone_type == DroneType.MISSILE]
+        self.assertEqual(len(missile_targets), 1)
+        self.assertLessEqual(missile_targets[0].eta_min_minutes, 16.0)
+        self.assertLessEqual(missile_targets[0].eta_max_minutes, 22.0)
+
+        # 3. Fast jump (~95 km in 5 min) to Borshchiv -> Chernelytsia links to the same missile target
+        t2 = t1 + timedelta(minutes=5)
+        p_cher = RawPost("monitoring_zaxid", 5003, "КР Х-101 повз Борщів у напрямку Чернелиці", t2)
+        alerts_cher = self.tracker.process_message(p_cher, self.normalizer.parse(p_cher), now=t2)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+        self.assertEqual(len(alerts_cher), 1)
+        self.assertEqual(alerts_cher[0].level, AlertLevel.LEVEL_3A)
+        self.assertIn("(КР Х-101)", alerts_cher[0].title)
+
+        # 4. Regional cruise missile alert (e.g. Kalibr on Kalush) is non-silent and uses missile phrasing
+        t3 = t2 + timedelta(minutes=1)
+        p_kalibr = RawPost("monitoring_zaxid", 5004, "2х Калібри курсом на Калуш!", t3)
+        alerts_kal = self.tracker.process_message(p_kalibr, self.normalizer.parse(p_kalibr), now=t3)
+        self.assertEqual(len(alerts_kal), 1)
+        self.assertEqual(alerts_kal[0].level, AlertLevel.REGIONAL)
+        self.assertFalse(alerts_kal[0].is_silent)
+        self.assertIn("🚀 Зафіксовано рух крилатої ракети (КР Калібр)", alerts_kal[0].body)
+
+        # 5. Burshtyn is classified as Level 2 approach alert
+        t4 = t3 + timedelta(minutes=1)
+        p_burshtyn = RawPost("monitoring_zaxid", 5005, "Реактивна герань курсом на Бурштин!", t4)
+        alerts_bur = self.tracker.process_message(p_burshtyn, self.normalizer.parse(p_burshtyn), now=t4)
+        self.assertEqual(len(alerts_bur), 1)
+        self.assertEqual(alerts_bur[0].level, AlertLevel.LEVEL_2)
+        self.assertIn("Бурштин", alerts_bur[0].title)
+        self.assertFalse(alerts_bur[0].is_silent)
+
+    def test_missile_corridor_level1_to_if_escalation(self):
+        """Cruise missiles heading toward Khmelnytskyi, Ternopil, or Lviv must create Level 1 targets
+        and smoothly escalate when turning toward Ivano-Frankivsk or Burshtyn.
+        """
+        t0 = datetime(2026, 10, 16, 15, 0, 0, tzinfo=UTC)
+        p1 = RawPost("kpszsu", 6001, "Група КР Х-101 курсом на Хмельницький", t0)
+        a1 = [a for a in self.tracker.process_message(p1, self.normalizer.parse(p1), now=t0) if not a.is_update]
+        self.assertEqual(len(a1), 1)
+        self.assertEqual(a1[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Хмельницький (ракетний коридор)", a1[0].title)
+
+        t1 = t0 + timedelta(minutes=4)
+        p2 = RawPost("monitoring_zaxid", 6002, "КР Х-101 продовжують рух на Тернопіль", t1)
+        a2 = [a for a in self.tracker.process_message(p2, self.normalizer.parse(p2), now=t1) if not a.is_update]
+        self.assertEqual(len(a2), 1)
+        self.assertEqual(a2[0].level, AlertLevel.LEVEL_1)
+        self.assertIn("Тернопіль (ракетний коридор)", a2[0].title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = t1 + timedelta(minutes=3)
+        p3 = RawPost("monitoring_zaxid", 6003, "КР Х-101 змінили курс на Івано-Франківськ!", t2)
+        a3 = [a for a in self.tracker.process_message(p3, self.normalizer.parse(p3), now=t2) if not a.is_update]
+        self.assertEqual(len(a3), 1)
+        self.assertEqual(a3[0].level, AlertLevel.LEVEL_3A)
+        self.assertFalse(a3[0].is_silent)
+        self.assertIn("Курс на Івано-Франківськ", a3[0].title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+    def test_missed_if_sequences_end_to_end(self):
+        """End-to-end verification of the missed sequences from 2026-10-16:
+        - 28309 (Martynivka) -> 28310 (IF raion danger) -> 28312 (Підвертає на Франківськ) -> 124063 (Monastyryska) -> 124068 (IF airport)
+        - 28452 (Kamianets with parenthetical preventive) -> 28456 (south Ternopil towards IF) -> 124290 (Rivne + IF) -> 28458 (Tlumach)
+        """
+        t0 = datetime(2026, 10, 16, 4, 33, 50, tzinfo=UTC)
+        seq1 = [
+            (t0, "monitoring_zaxid", 28309, "Тернопільська область:\n1 реактивна герань поблизу Чорткова, курс на Мартинівку"),
+            (t0 + timedelta(seconds=37), "monitoring_zaxid", 28310, "Івано-Франківський район - дронова небезпека по реактиву на Тернопільщині"),
+            (t0 + timedelta(seconds=74), "monitoring_zaxid", 28312, "Підвертає на Франківськ \n\n❗️"),
+            (t0 + timedelta(seconds=144), "kudy_letyt", 124063, "Реактивний БпЛА курсом на Монастириська"),
+            (t0 + timedelta(seconds=288), "kudy_letyt", 124064, "Реактивний БпЛА курсом на Єзупіль"),
+            (t0 + timedelta(seconds=471), "kudy_letyt", 124068, "Івано-Франківськ: реактивний БпЛА курсом на аеропорт"),
+        ]
+        emitted1 = []
+        for ts, ch, mid, txt in seq1:
+            post = RawPost(ch, mid, txt, ts)
+            evts = [a for a in self.tracker.process_message(post, self.normalizer.parse(post), now=ts) if not a.is_update]
+            emitted1.extend(evts)
+
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+        levels1 = [a.level for a in emitted1]
+        self.assertIn(AlertLevel.LEVEL_2, levels1)
+        self.assertIn(AlertLevel.LEVEL_3A, levels1)
+        self.assertIn(AlertLevel.LEVEL_3B, levels1)
+
+    def test_suburban_level_3b_settlements(self):
+        """All 9 suburbs around Ivano-Frankivsk (Вовчинці, Підпечери, Клузів, Ямниця, Угринів,
+        Микитинці, Драгомирчани, Крихівці, Черніїв) and their inflections must trigger LEVEL_3B.
+        """
+        cases = [
+            ("Реактивний БпЛА курсом на Вовчинці", "vovchyntsi", "Вовчинці"),
+            ("Реактивний БпЛА над Вовчинцем", "vovchyntsi", "Вовчинці"),
+            ("Реактивний БпЛА в районі Підпечер", "pidpechery", "Підпечери"),
+            ("Реактивний БпЛА повз Клузів", "kluziv", "Клузів"),
+            ("Реактивний БпЛА курсом на Ямницю", "yamnytsia", "Ямниця"),
+            ("Реактивний БпЛА біля Угринова", "uhryniv", "Угринів"),
+            ("Реактивний БпЛА у напрямку Микитинців", "mykytyntsi", "Микитинці"),
+            ("Реактивний БпЛА над Драгомирчанами", "drahomyrchany", "Драгомирчани"),
+            ("Реактивний БпЛА в районі Крихівців", "krykhivtsi", "Крихівці"),
+            ("Реактивний БпЛА курсом на Черніїв", "cherniiv", "Черніїв"),
+        ]
+        for idx, (text, expected_pid, expected_title_name) in enumerate(cases):
+            with self.subTest(text=text):
+                tracker = TargetTracker(self.cache)
+                ts = datetime(2026, 10, 16, 12, 0, 0, tzinfo=UTC) + timedelta(minutes=idx * 5)
+                post = RawPost("kudy_letyt", 95000 + idx, text, ts)
+                parsed = self.normalizer.parse(post)
+                self.assertEqual(parsed.points, [expected_pid])
+                alerts = tracker.process_message(post, parsed, now=ts)
+                self.assertEqual(len(alerts), 1)
+                self.assertEqual(alerts[0].level, AlertLevel.LEVEL_3B)
+                self.assertIn("Небезпека біля / над містом", alerts[0].title)
+                self.assertIn(expected_title_name, alerts[0].title)
+
+    def test_oct18_geran5_sequence_no_false_missile_alert(self):
+        """End-to-end replay of the 2026-10-18 19:26-19:46 UTC episode:
+        Ensure 'ракета-дрон «Герань-5»' and subsequent Khmelnytskyi/Chornyi Ostriv posts
+        never create a DroneType.MISSILE target or emit a cruise missile alert.
+        """
+        t0 = datetime(2026, 10, 18, 19, 26, 20, tzinfo=UTC)
+        posts = [
+            (t0, "kudy_letyt", 124865, "Хмельниччина:\nРеактивний БпЛА курсом на Дунаївці"),
+            (
+                t0 + timedelta(seconds=13),
+                "monitoring_zaxid",
+                28673,
+                "За уточненою інформацією та порівнянням ТТХ, вдалось визначити, що на Вінниччині в напрямку Козятина рухається не «Бандероль», а ракета-дрон «Герань-5»",
+            ),
+            (
+                t0 + timedelta(minutes=4, seconds=6),
+                "monitoring_zaxid",
+                28676,
+                "Хмельниччина:\n1 реактивна герань поблизу Нової Ушиці, західний курс",
+            ),
+            (
+                t0 + timedelta(minutes=7, seconds=17),
+                "monitoring_zaxid",
+                28679,
+                "Йде повз Дунаївці у бік Камʼянця-Подільського",
+            ),
+            (
+                t0 + timedelta(minutes=9, seconds=4),
+                "monitoring_zaxid",
+                28680,
+                "Наразі рухається на північ області в напрямку Ярмолинців/Хмельницького",
+            ),
+            (
+                t0 + timedelta(minutes=19, seconds=25),
+                "monitoring_zaxid",
+                28681,
+                "Хмельницький: Чорний Острів повз західні околиці ❗️",
+            ),
+        ]
+        all_alerts = []
+        for ts, ch, mid, txt in posts:
+            post = RawPost(ch, mid, txt, ts)
+            parsed = self.normalizer.parse(post)
+            self.assertNotEqual(parsed.drone_type, DroneType.MISSILE, txt)
+            all_alerts.extend(self.tracker.process_message(post, parsed, now=ts))
+
+        for alert in all_alerts:
+            self.assertNotIn("крилата ракета", alert.title)
+            self.assertNotIn("ракетний коридор", alert.title)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_oct19_lviv_jet_course_to_if_diverts_back_to_lviv(self):
+        """End-to-end replay of 2026-10-19 05:04-05:07 UTC episode:
+        A jet drone in Lviv region briefly takes a course toward Ivano-Frankivsk oblast (if_direct_course, Level 3A)
+        and then turns back to Lviv ('Реактивний БпЛА повертається на Львів').
+        Must transition the active target to DIVERTED.
+        """
+        t0 = datetime(2026, 10, 19, 5, 4, 40, tzinfo=UTC)
+        p1 = RawPost("monitoring_zaxid", 28766, "Львівщина:\n1 реактивна герань на Миколаїв/Новий Розділ віддаляється", t0)
+        self.tracker.process_message(p1, self.normalizer.parse(p1), now=t0)
+
+        t1 = t0 + timedelta(seconds=38)
+        p2 = RawPost("monitoring_zaxid", 28767, "Взяв курс на Франківщину взагалі", t1)
+        alerts2 = self.tracker.process_message(p2, self.normalizer.parse(p2), now=t1)
+        self.assertEqual(len(alerts2), 1)
+        self.assertEqual(alerts2[0].level, AlertLevel.LEVEL_3A)
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+        t2 = t0 + timedelta(minutes=2, seconds=24)
+        p3 = RawPost("kudy_letyt", 125084, "Львівщина:\nРеактивний БпЛА повертається на Львів", t2)
+        parsed3 = self.normalizer.parse(p3)
+        self.assertEqual(parsed3.action, ActionType.DIVERTED)
+        alerts3 = self.tracker.process_message(p3, parsed3, now=t2)
+        self.assertEqual(len(alerts3), 1)
+        self.assertEqual(alerts3[0].title, "Ціль змінила курс")
+        self.assertIn("Львів", alerts3[0].body)
+        self.assertEqual(len(self.tracker.get_active_targets()), 0)
+
+    def test_dunaivtsi_and_kelmentsi_do_not_cross_merge(self):
+        """Ensure a drone at Dunaivtsi (central Khmelnytskyi) and a drone at Vendychany crossing into
+        Novodnistrovsk/Kelmentsi (Bukovyna) stay on separate tracks.
+        """
+        t0 = datetime(2026, 10, 18, 4, 0, 52, tzinfo=UTC)
+        digest_124719 = (
+            "Вінниччина:\n"
+            "БпЛА курсом на Вендичани\n\n"
+            "Хмельниччина:\n"
+            "БпЛА курсом на Дунаївці"
+        )
+        p_124719 = RawPost("kudy_letyt", 124719, digest_124719, t0)
+        self.tracker.process_message(p_124719, self.normalizer.parse(p_124719), now=t0)
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
+
+        t2 = t0 + timedelta(minutes=15)
+        p_buk = RawPost("kudy_letyt", 124726, "Буковина:\nБпЛА курсом на Новодністровськ", t2)
+        self.tracker.process_message(p_buk, self.normalizer.parse(p_buk), now=t2)
+
+        active = {t.last_point_id: t for t in self.tracker.get_active_targets()}
+        self.assertIn("dunaivtsi", active)
+        self.assertIn("kelmentsi", active)
+        self.assertIn("vendychany", active["kelmentsi"].points_sequence)
+
+    def test_khmelnytskyi_airport_does_not_hijack_buchach_target(self):
+        """Regression test for 2026-10-20T00:20Z:
+        A target tracked at Buchach (125541, 29041) must NOT be escalated to Level 3B Ivano-Frankivsk
+        when Khmelnytskyi airport posts arrive (kudy_letyt/125547, monitoring_zaxid/29047).
+        Also verifies Rohatyn -> Khodoriv/Lvivshchyna diversion (kudy_letyt/125607, kpszsu/88620).
+        """
+        t0 = datetime(2026, 10, 20, 0, 11, 25, tzinfo=UTC)
+        p_buch = RawPost("kudy_letyt", 125541, "Тернопільщина:\nРеактивний БпЛА курсом на Бучач", t0)
+        alerts_buch = self.tracker.process_message(p_buch, self.normalizer.parse(p_buch), now=t0)
+        self.assertEqual(len(alerts_buch), 1)
+        self.assertEqual(alerts_buch[0].level, AlertLevel.LEVEL_2)
+
+        t1 = t0 + timedelta(minutes=8, seconds=42)
+        p_khm1 = RawPost("kudy_letyt", 125547, "Хмельницький:\nРеактивний БпЛА курсом на аеропорт", t1)
+        alerts_khm1 = self.tracker.process_message(p_khm1, self.normalizer.parse(p_khm1), now=t1)
+        self.assertEqual(alerts_khm1, [])
+
+        t2 = t1 + timedelta(seconds=31)
+        p_khm2 = RawPost("monitoring_zaxid", 29047, "‼️Хмельницький - уважно, реактивна герань у бік аеропорту!", t2)
+        alerts_khm2 = self.tracker.process_message(p_khm2, self.normalizer.parse(p_khm2), now=t2)
+        self.assertEqual(alerts_khm2, [])
+
+        active = self.tracker.get_active_targets()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].last_point_id, "buchach")
+
+        # Rohatyn -> Khodoriv / Lvivshchyna diversion sequence (T-202610200239-ca7b)
+        t_roh = datetime(2026, 10, 20, 2, 43, 26, tzinfo=UTC)
+        p_roh = RawPost("kudy_letyt", 125606, "Франківщина:\nРеактивний БпЛА курсом на Рогатин з Тернопіщини", t_roh)
+        self.tracker.process_message(p_roh, self.normalizer.parse(p_roh), now=t_roh)
+        roh_targets = [t for t in self.tracker.get_active_targets() if t.last_point_id == "rohatyn"]
+        self.assertEqual(len(roh_targets), 1)
+
+        t_khod = t_roh + timedelta(minutes=3, seconds=39)
+        p_khod = RawPost("kudy_letyt", 125607, "Продовжує рух в бік Ходорів (Львівщина)", t_khod)
+        parsed_khod = self.normalizer.parse(p_khod)
+        self.assertEqual(parsed_khod.action, ActionType.DIVERTED)
+        alerts_khod = self.tracker.process_message(p_khod, parsed_khod, now=t_khod)
+        self.assertEqual(len(alerts_khod), 1)
+        self.assertEqual(alerts_khod[0].title, "Ціль змінила курс")
+        self.assertIn("Ходорів", alerts_khod[0].body)
+
+    def test_chortkiv_and_zalishchyky_corridor_progression(self):
+        """Chortkiv (~82 km) and Zalishchyky (~81 km) trigger Level 2 approach alerts,
+        and subsequent Stryi diversion generates an accurate course change alert.
+        """
+        t0 = datetime(2026, 10, 21, 18, 5, 0, tzinfo=UTC)
+
+        # 1. Chortkiv
+        p_chort = RawPost("kudy_letyt", 126201, "Тернопільщина:\nРеактивний БпЛА курсом на Чортків", t0)
+        alerts_chort = self.tracker.process_message(p_chort, self.normalizer.parse(p_chort), now=t0)
+        self.assertEqual(len(alerts_chort), 1)
+        self.assertEqual(alerts_chort[0].level, AlertLevel.LEVEL_2)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "chortkiv")
+
+        # 2. Progression to Buchach
+        t1 = t0 + timedelta(minutes=4)
+        p_buch = RawPost("monitoring_zaxid", 29510, "Тернопільська область:\n1 реактивна герань на Бучач", t1)
+        alerts_buch = self.tracker.process_message(p_buch, self.normalizer.parse(p_buch), now=t1)
+        self.assertEqual(len(alerts_buch), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "buchach")
+
+        # 3. Progression to Burshtyn
+        t2 = t1 + timedelta(minutes=6)
+        p_bur = RawPost("kudy_letyt", 126205, "Франківщина:\nРеактивний БпЛА курсом на Бурштин", t2)
+        alerts_bur = self.tracker.process_message(p_bur, self.normalizer.parse(p_bur), now=t2)
+        self.assertEqual(len(alerts_bur), 1)
+        self.assertEqual(self.tracker.get_active_targets()[0].last_point_id, "burshtyn")
+
+        # 4. Diversion towards Stryi
+        t3 = t2 + timedelta(minutes=4)
+        p_stryi = RawPost("kudy_letyt", 126210, "Львівщина:\nРеактивний БпЛА курсом на Стрий povz Войнилів", t3)
+        alerts_stryi = self.tracker.process_message(p_stryi, self.normalizer.parse(p_stryi), now=t3)
+        self.assertEqual(len(alerts_stryi), 1)
+        self.assertEqual(alerts_stryi[0].title, "Ціль змінила курс")
+        self.assertIn("Стрий", alerts_stryi[0].body)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
 
 

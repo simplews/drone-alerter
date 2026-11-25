@@ -30,6 +30,7 @@
 - **Telegram Adapters (`src/telegram/`)**:
   - `listener.py`: Telethon MTProto клієнт з heartbeat та автоматичним сповіщенням про розрив зв'язку.
   - `bot.py`: Aiogram 3 бот сповіщень із підтримкою DND-налаштувань користувача та приватності (`/stop`).
+  - `feedback.py`: Двостороння анонімна система зворотного звʼязку через адмін-групу ([docs/FEEDBACK.md](docs/FEEDBACK.md)).
   - `generate_session.py`: Генератор безфайлової сесії `TELETHON_STRING_SESSION`.
 - **Healthcheck & Monitoring API (`src/api/`)**:
   - `server.py`: FastAPI ендпоінти `/health` та `/targets`.
@@ -92,7 +93,7 @@ docker compose up -d
 curl http://localhost:8080/health
 ```
 
-Детальніше про безкоштовне розгортання на Oracle Cloud Always Free або Koyeb див. у [docs/DEPLOYMENT.md](file:///Users/andriyozorovych/Documents/antigravity/kind-bose/docs/DEPLOYMENT.md).
+Детальніше про безкоштовне розгортання на Oracle Cloud Always Free або Koyeb див. у [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 

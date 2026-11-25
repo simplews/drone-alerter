@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aiogram.types import Chat, Message
 
-from src.engine.models import AlertLevel, Target
+from src.engine.models import AlertLevel, DroneType, Target
 from src.telegram.bot import (
     SubscriberRepository,
     create_bot_dispatcher,
@@ -46,7 +46,8 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.sub_repo.add.assert_called_once_with(100)
         msg.answer.assert_called_once()
         text = msg.answer.call_args[0][0]
-        self.assertIn("Вітаємо в системі завчасного попередження", text)
+        self.assertIn("Вітаємо!", text)
+        self.assertIn("Головне правило", text)
         self.assertIn("/status", text)
         self.assertIn("/eta", text)
         self.assertIn("/howitworks", text)
@@ -99,17 +100,29 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
             eta_min_minutes=26.0,
             eta_max_minutes=33.0,
         )
-        self.tracker.get_active_targets.return_value = [mock_target]
+        mock_missile = Target(
+            id="test-missile",
+            level=AlertLevel.LEVEL_2,
+            last_point_id="kamianets_podilskyi",
+            drone_type=DroneType.MISSILE,
+            target_type="КР Х-101",
+            last_seen_utc=now,
+            target_count=2,
+            eta_min_minutes=8.0,
+            eta_max_minutes=11.0,
+        )
+        self.tracker.get_active_targets.return_value = [mock_target, mock_missile]
 
         msg = MagicMock(spec=Message, text="/status", chat=MagicMock(spec=Chat, id=103))
         msg.answer = AsyncMock()
 
         await handler(msg)
         text = msg.answer.call_args[0][0]
-        self.assertIn("Зафіксовано активних цілей на коридорі: 1", text)
+        self.assertIn("Зафіксовано активних цілей на коридорі: 2", text)
         self.assertIn("Нова Ушиця", text)
-        self.assertIn("🟡 Рівень 1 (Потенційна загроза)", text)
+        self.assertIn("🟡 Потенційна загроза", text)
         self.assertIn("26–33 хв", text)
+        self.assertIn("2х • КР Х-101", text)
 
     async def test_cmd_status_regional_target(self):
         handler = self._get_handler("cmd_status")
@@ -132,7 +145,20 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         text = msg.answer.call_args[0][0]
         self.assertIn("Коломия", text)
         self.assertIn("ℹ️ Загроза в області (ймовірна тривога)", text)
-        self.assertIn("загроза району області (курс не на ІФ)", text)
+        self.assertIn("загроза району області (курс не на Франківськ)", text)
+
+        # When official siren is active, do not say "(ймовірна тривога)"
+        self.siren_service.get_current_state.return_value = MagicMock(
+            is_active=True,
+            region="Івано-Франківська область",
+            changed_at="2026-10-16 07:34:00",
+        )
+        msg_active = MagicMock(spec=Message, text="/status", chat=MagicMock(spec=Chat, id=109))
+        msg_active.answer = AsyncMock()
+        await handler(msg_active)
+        text_active = msg_active.answer.call_args[0][0]
+        self.assertIn("ℹ️ Загроза в області\n", text_active)
+        self.assertNotIn("ймовірна тривога", text_active)
 
     async def test_cmd_eta(self):
         handler = self._get_handler("cmd_eta")
@@ -169,7 +195,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         await handler(msg)
         text = msg.answer.call_args[0][0]
         self.assertIn("БЕЗПЕКОВЕ ЗАСТЕРЕЖЕННЯ (ДИСКЛЕЙМЕР)", text)
-        self.assertIn("Не є офіційним джерелом", text)
+        self.assertIn("Бот не є офіційним джерелом", text)
 
     async def test_cmd_test(self):
         handler = self._get_handler("cmd_test")
@@ -178,7 +204,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
 
         await handler(msg)
         text = msg.answer.call_args[0][0]
-        self.assertIn("[ТЕСТ] ТЕХНІЧНЕ СПОВІЩЕННЯ СИСТЕМИ", text)
+        self.assertIn("[ТЕСТ] Технічне сповіщення", text)
         self.assertIn("Реальної загрози немає", text)
 
     async def test_cmd_stop(self):
@@ -190,7 +216,7 @@ class BotCommandsTests(unittest.IsolatedAsyncioTestCase):
         self.sub_repo.remove.assert_called_once_with(108)
         self.feedback_repo.delete_user_tickets.assert_called_once_with(108)
         text = msg.answer.call_args[0][0]
-        self.assertIn("Всі сповіщення зупинено", text)
+        self.assertIn("Сповіщення вимкнено", text)
         self.assertIn("/start", text)
 
     async def test_setup_bot_commands(self):

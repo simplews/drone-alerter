@@ -1,0 +1,1624 @@
+{
+  "version": 9,
+  "parent_version": 8,
+  "created_at": "2026-10-25T07:08:41+00:00",
+  "status": "active",
+  "points": {
+    "pishchanka": {
+      "id": "pishchanka",
+      "names": [
+        "піщанка",
+        "піщанку",
+        "піщанці"
+      ],
+      "level": 1,
+      "distance_km": 265.0,
+      "eta_min": 33.0,
+      "eta_max": 45.0,
+      "eta_method": "empirical_q",
+      "n_obs": 6,
+      "base_rate": 0.5,
+      "n_outcomes": 20,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "vendychany": {
+      "id": "vendychany",
+      "names": [
+        "вендичани",
+        "вендичанах",
+        "вендичан"
+      ],
+      "level": 1,
+      "distance_km": 225.0,
+      "eta_min": 29.0,
+      "eta_max": 39.0,
+      "eta_method": "empirical_q",
+      "n_obs": 6,
+      "base_rate": 0.342,
+      "n_outcomes": 36,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "nova_ushytsia": {
+      "id": "nova_ushytsia",
+      "names": [
+        "нова ушиця",
+        "нову ушицю",
+        "новій ушиці",
+        "н. ушиця",
+        "н.ушиця",
+        "ушиця",
+        "ушицю",
+        "нової ушиці",
+        "новою ушицею",
+        "н. ушиці",
+        "н. ушицю",
+        "н. ушицею",
+        "ушиці",
+        "ушицею",
+        "камʼянець-подільський район",
+        "камянець-подільський район",
+        "камʼянець-подільського району",
+        "камянець-подільського району",
+        "камʼянець-подільському районі",
+        "камянець-подільському районі",
+        "камʼянець-подільським районом",
+        "камянець-подільським районом",
+        "камʼянець-подільський р-н",
+        "камянець-подільський р-н",
+        "камʼянець-подільського р-н",
+        "камʼянець-подільського р-ну",
+        "камʼянець-подільському р-ні",
+        "камʼянець-подільському р-н",
+        "камʼянець-подільський рн",
+        "камʼянецький район",
+        "камянецький район",
+        "камʼянецького району",
+        "камянецького району",
+        "камʼянецькому районі",
+        "камянецькому районі",
+        "камʼянецьким районом",
+        "камянецьким районом",
+        "камʼянецький р-н",
+        "камянецький р-н",
+        "камʼянецького р-ну",
+        "камянецького р-ну",
+        "камʼянецького р-н",
+        "камянецького р-н",
+        "камʼянецькому р-ні",
+        "камянецькому р-ні",
+        "камʼянецькому р-н",
+        "камянецькому р-н",
+        "новоушицький район",
+        "новоушицького району",
+        "новоушицькому районі",
+        "новоушицький р-н",
+        "новоушицького р-ну",
+        "новоушицькому р-ні"
+      ],
+      "level": 1,
+      "distance_km": 190.0,
+      "eta_min": 26.0,
+      "eta_max": 33.0,
+      "eta_method": "empirical_q",
+      "n_obs": 16,
+      "base_rate": 0.377,
+      "n_outcomes": 51,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "stara_ushytsia": {
+      "id": "stara_ushytsia",
+      "names": [
+        "стара ушиця",
+        "стару ушицю",
+        "старій ушиці",
+        "старої ушиці",
+        "старою ушицею"
+      ],
+      "level": 1,
+      "distance_km": 165.0,
+      "eta_min": 17.0,
+      "eta_max": 26.0,
+      "eta_method": "empirical_q",
+      "n_obs": 8,
+      "base_rate": 0.542,
+      "n_outcomes": 22,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "dunaivtsi": {
+      "id": "dunaivtsi",
+      "names": [
+        "дунаївці",
+        "дунаївцях",
+        "дунаївців"
+      ],
+      "level": 1,
+      "distance_km": 160.0,
+      "eta_min": 16.0,
+      "eta_max": 25.0,
+      "eta_method": "empirical_q",
+      "n_obs": 8,
+      "base_rate": 0.281,
+      "n_outcomes": 55,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "tomashpil": {
+      "id": "tomashpil",
+      "names": [
+        "томашпіль",
+        "томашполі",
+        "томашполя"
+      ],
+      "level": 1,
+      "distance_km": 250.0,
+      "eta_min": 28.0,
+      "eta_max": 43.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 2,
+      "base_rate": 0.111,
+      "n_outcomes": 25,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "kamianets_podilskyi": {
+      "id": "kamianets_podilskyi",
+      "names": [
+        "камʼянець-подільський",
+        "кам'янець-подільський",
+        "камянець",
+        "камʼянець",
+        "кам'янці",
+        "камʼянці",
+        "камʼянця",
+        "кам'янця",
+        "камʼянець-подільського",
+        "камʼянця-подільського",
+        "камянець-подільський",
+        "камянець-подільського",
+        "камянця-подільського",
+        "камʼянцю-подільському",
+        "камʼянці-подільському",
+        "камʼянцем-подільським"
+      ],
+      "level": 2,
+      "distance_km": 135.0,
+      "eta_min": 13.0,
+      "eta_max": 25.0,
+      "eta_method": "empirical_q",
+      "n_obs": 18,
+      "base_rate": 0.65,
+      "n_outcomes": 38,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "skala_podilska": {
+      "id": "skala_podilska",
+      "names": [
+        "скала-подільська",
+        "скалу-подільську",
+        "скалі-подільській",
+        "скала",
+        "скали-подільської",
+        "скалу",
+        "скалу-подільськк",
+        "скалою-подільською",
+        "скала-п",
+        "скалу-п",
+        "скали-п",
+        "скалі-п",
+        "скали",
+        "скалі",
+        "мельниця-подільська",
+        "мельницю-подільську",
+        "мельниці-подільської",
+        "мельниці-подільській"
+      ],
+      "level": 2,
+      "distance_km": 110.0,
+      "eta_min": 11.0,
+      "eta_max": 19.0,
+      "eta_method": "empirical_q",
+      "n_obs": 7,
+      "base_rate": 0.562,
+      "n_outcomes": 14,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "tovste": {
+      "id": "tovste",
+      "names": [
+        "товсте",
+        "товстому",
+        "товстого"
+      ],
+      "level": 2,
+      "distance_km": 75.0,
+      "eta_min": 7.0,
+      "eta_max": 15.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 5,
+      "base_rate": 0.625,
+      "n_outcomes": 14,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "borshchiv": {
+      "id": "borshchiv",
+      "names": [
+        "борщів",
+        "борщеві",
+        "борщєві",
+        "борщова",
+        "борщева"
+      ],
+      "level": 2,
+      "distance_km": 95.0,
+      "eta_min": 12.0,
+      "eta_max": 18.0,
+      "eta_method": "empirical_q",
+      "n_obs": 18,
+      "base_rate": 0.786,
+      "n_outcomes": 26,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "chernelytsia": {
+      "id": "chernelytsia",
+      "names": [
+        "чернелиця",
+        "чернелицю",
+        "чернелиці",
+        "чернелицею"
+      ],
+      "level": 3,
+      "distance_km": 54.0,
+      "eta_min": 3.0,
+      "eta_max": 12.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 5,
+      "base_rate": 0.8,
+      "n_outcomes": 8,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "tlumach": {
+      "id": "tlumach",
+      "names": [
+        "тлумач",
+        "тлумачі",
+        "тлумачем",
+        "тлумачу",
+        "тлумача",
+        "озеряни",
+        "озерян",
+        "озерянах",
+        "гринівці",
+        "гринівців",
+        "гринівцях"
+      ],
+      "level": 3,
+      "distance_km": 25.0,
+      "eta_min": 1.0,
+      "eta_max": 7.0,
+      "eta_method": "empirical_q",
+      "n_obs": 15,
+      "base_rate": 0.941,
+      "n_outcomes": 15,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "tysmenytsia": {
+      "id": "tysmenytsia",
+      "names": [
+        "тисмениця",
+        "тисменицю",
+        "тисмениці",
+        "тисменицею"
+      ],
+      "level": 3,
+      "distance_km": 12.0,
+      "eta_min": 1.0,
+      "eta_max": 5.0,
+      "eta_method": "empirical_q",
+      "n_obs": 6,
+      "base_rate": 0.917,
+      "n_outcomes": 10,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "khryplyn": {
+      "id": "khryplyn",
+      "names": [
+        "хриплин",
+        "хриплині",
+        "хриплину",
+        "хриплина",
+        "хриплином"
+      ],
+      "level": 3,
+      "distance_km": 7.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "empirical_q",
+      "n_obs": 8,
+      "base_rate": 0.944,
+      "n_outcomes": 16,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "murovani_kyrylivtsi": {
+      "id": "murovani_kyrylivtsi",
+      "names": [
+        "муровані кирилівці",
+        "муровані-кирилівці",
+        "мурованих кирилівцях",
+        "мурованих-кирилівцях",
+        "муровані курилівці",
+        "муровані-курилівці",
+        "мурованих курилівцях",
+        "мурованих-курилівцях",
+        "муровані куриловці",
+        "муровані-куриловці",
+        "курилівці",
+        "курилівцях",
+        "курилівців"
+      ],
+      "level": 1,
+      "distance_km": 205.0,
+      "eta_min": 27.0,
+      "eta_max": 36.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.3,
+      "n_outcomes": 8,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "pudlivtsi": {
+      "id": "pudlivtsi",
+      "names": [
+        "пудлівці",
+        "пудлівцях",
+        "пудлівців",
+        "пудлівцями"
+      ],
+      "level": 2,
+      "distance_km": 133.0,
+      "eta_min": 18.0,
+      "eta_max": 24.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "kelmentsi": {
+      "id": "kelmentsi",
+      "names": [
+        "кельменці",
+        "кельменців",
+        "кельменцях",
+        "кельменцями",
+        "хотин",
+        "хотина",
+        "хотині",
+        "хотином",
+        "новодністровськ",
+        "новодністровська",
+        "новодністровську",
+        "сокиряни",
+        "сокирян",
+        "сокирянах"
+      ],
+      "level": 1,
+      "distance_km": 155.0,
+      "eta_min": 19.0,
+      "eta_max": 25.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.6,
+      "n_outcomes": 3,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "buchach": {
+      "id": "buchach",
+      "names": [
+        "бучач",
+        "бучача",
+        "бучачі",
+        "бучачем",
+        "бучачу",
+        "мартинівка",
+        "мартинівку",
+        "мартинівці",
+        "мартинівки"
+      ],
+      "level": 2,
+      "distance_km": 68.0,
+      "eta_min": 6.0,
+      "eta_max": 13.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 1,
+      "base_rate": 0.5,
+      "n_outcomes": 2,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "monastyryska": {
+      "id": "monastyryska",
+      "names": [
+        "монастириська",
+        "монастириську",
+        "монастириській",
+        "монастириської",
+        "монастириськах"
+      ],
+      "level": 3,
+      "distance_km": 48.0,
+      "eta_min": 4.0,
+      "eta_max": 10.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 1,
+      "base_rate": 0.5,
+      "n_outcomes": 2,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "yezupil": {
+      "id": "yezupil",
+      "names": [
+        "єзупіль",
+        "єзуполя",
+        "єзуполі",
+        "єзуполем"
+      ],
+      "level": 3,
+      "distance_km": 18.0,
+      "eta_min": 0.0,
+      "eta_max": 5.0,
+      "eta_method": "minmax+margin+prior",
+      "n_obs": 1,
+      "base_rate": 0.667,
+      "n_outcomes": 1,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "pidpechery": {
+      "id": "pidpechery",
+      "names": [
+        "підпечери",
+        "підпечер",
+        "підпечерам",
+        "підпечерами",
+        "підпечерах"
+      ],
+      "level": 3,
+      "distance_km": 9.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "yamnytsia": {
+      "id": "yamnytsia",
+      "names": [
+        "ямниця",
+        "ямниці",
+        "ямницю",
+        "ямницею"
+      ],
+      "level": 3,
+      "distance_km": 8.5,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "cherniiv": {
+      "id": "cherniiv",
+      "names": [
+        "черніїв",
+        "чернієва",
+        "чернієву",
+        "чернієвом",
+        "чернієві",
+        "черніїва",
+        "черніїву",
+        "черніївом",
+        "черніїві"
+      ],
+      "level": 3,
+      "distance_km": 8.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "drahomyrchany": {
+      "id": "drahomyrchany",
+      "names": [
+        "драгомирчани",
+        "драгомирчан",
+        "драгомирчанам",
+        "драгомирчанами",
+        "драгомирчанах"
+      ],
+      "level": 3,
+      "distance_km": 7.5,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "kluziv": {
+      "id": "kluziv",
+      "names": [
+        "клузів",
+        "клузова",
+        "клузову",
+        "клузовом",
+        "клузові",
+        "клузева",
+        "клузеву",
+        "клузевом",
+        "клузеві"
+      ],
+      "level": 3,
+      "distance_km": 6.5,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "vovchyntsi": {
+      "id": "vovchyntsi",
+      "names": [
+        "вовчинці",
+        "вовчинців",
+        "вовчинцям",
+        "вовчинцями",
+        "вовчинцях",
+        "вовчинець",
+        "вовчинця",
+        "вовчинцю",
+        "вовчинцем"
+      ],
+      "level": 3,
+      "distance_km": 6.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "uhryniv": {
+      "id": "uhryniv",
+      "names": [
+        "угринів",
+        "угринова",
+        "угринову",
+        "угриновом",
+        "угринові",
+        "угринева",
+        "угриневу",
+        "угриневом",
+        "угриневі"
+      ],
+      "level": 3,
+      "distance_km": 5.5,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "mykytyntsi": {
+      "id": "mykytyntsi",
+      "names": [
+        "микитинці",
+        "микитинців",
+        "микитинцям",
+        "микитинцями",
+        "микитинцях",
+        "микитинець",
+        "микитинця",
+        "микитинцю",
+        "микитинцем"
+      ],
+      "level": 3,
+      "distance_km": 5.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "krykhivtsi": {
+      "id": "krykhivtsi",
+      "names": [
+        "крихівці",
+        "крихівців",
+        "крихівцям",
+        "крихівцями",
+        "крихівцях",
+        "крихівець",
+        "крихівця",
+        "крихівцю",
+        "крихівцем"
+      ],
+      "level": 3,
+      "distance_km": 4.5,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "bukovyna_if_course": {
+      "id": "bukovyna_if_course",
+      "names": [
+        "Буковина (курс на ІФ)"
+      ],
+      "level": 2,
+      "distance_km": 120.0,
+      "eta_min": 15.0,
+      "eta_max": 21.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.667,
+      "n_outcomes": 1,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "ternopil_if_course": {
+      "id": "ternopil_if_course",
+      "names": [
+        "Тернопільщина (курс на ІФ)"
+      ],
+      "level": 2,
+      "distance_km": 70.0,
+      "eta_min": 7.0,
+      "eta_max": 12.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.8,
+      "n_outcomes": 3,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "if_direct_course": {
+      "id": "if_direct_course",
+      "names": [
+        "Курс на Івано-Франківськ"
+      ],
+      "level": 3,
+      "distance_km": 58.0,
+      "eta_min": 6.0,
+      "eta_max": 11.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.375,
+      "n_outcomes": 6,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "ivano_frankivsk": {
+      "id": "ivano_frankivsk",
+      "names": [
+        "Івано-Франківськ"
+      ],
+      "level": 3,
+      "distance_km": 3.0,
+      "eta_min": 0.0,
+      "eta_max": 2.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.667,
+      "n_outcomes": 1,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "khmelnytskyi_missile": {
+      "id": "khmelnytskyi_missile",
+      "names": [
+        "Хмельницький (ракетний коридор)"
+      ],
+      "level": 1,
+      "distance_km": 190.0,
+      "eta_min": 14.0,
+      "eta_max": 17.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.333,
+      "n_outcomes": 1,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "ternopil_missile": {
+      "id": "ternopil_missile",
+      "names": [
+        "Тернопіль (ракетний коридор)"
+      ],
+      "level": 1,
+      "distance_km": 120.0,
+      "eta_min": 8.0,
+      "eta_max": 11.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "lviv_missile": {
+      "id": "lviv_missile",
+      "names": [
+        "Львівщина (ракетний коридор)"
+      ],
+      "level": 1,
+      "distance_km": 115.0,
+      "eta_min": 8.0,
+      "eta_max": 11.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": true,
+      "name_gen": ""
+    },
+    "bohorodchany": {
+      "id": "bohorodchany",
+      "names": [
+        "богородчани",
+        "богородчанах",
+        "богородчан",
+        "богородчанами"
+      ],
+      "level": 1,
+      "distance_km": 18.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Богородчан"
+    },
+    "halych": {
+      "id": "halych",
+      "names": [
+        "галич",
+        "галича",
+        "галичем",
+        "галичу",
+        "галицький район",
+        "галицького району",
+        "галицькому районі",
+        "галицьким районом"
+      ],
+      "level": 1,
+      "distance_km": 25.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": 0.25,
+      "n_outcomes": 2,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Галича"
+    },
+    "otyniia": {
+      "id": "otyniia",
+      "names": [
+        "отинія",
+        "отинії",
+        "отинію",
+        "отинією"
+      ],
+      "level": 1,
+      "distance_km": 28.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": 0.667,
+      "n_outcomes": 1,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Отинії"
+    },
+    "kalush": {
+      "id": "kalush",
+      "names": [
+        "калуш",
+        "калуша",
+        "калуші",
+        "калушем",
+        "калушу",
+        "калуський район",
+        "калуського району",
+        "калуському районі",
+        "калуським районом",
+        "калущина",
+        "калущині",
+        "калущину"
+      ],
+      "level": 1,
+      "distance_km": 30.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": 0.4,
+      "n_outcomes": 3,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Калуша"
+    },
+    "burshtyn": {
+      "id": "burshtyn",
+      "names": [
+        "бурштин",
+        "бурштина",
+        "бурштині",
+        "бурштином",
+        "бурштинська тес",
+        "бурштинської тес",
+        "бурштинську тес",
+        "бурштину",
+        "бурштинський",
+        "бурштинського"
+      ],
+      "level": 2,
+      "distance_km": 38.0,
+      "eta_min": 4.0,
+      "eta_max": 9.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": 0.25,
+      "n_outcomes": 2,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": "Бурштина"
+    },
+    "kolomyia": {
+      "id": "kolomyia",
+      "names": [
+        "коломия",
+        "коломиї",
+        "коломию",
+        "коломиєю",
+        "коломийський район",
+        "коломийського району",
+        "коломийському районі",
+        "коломийським районом",
+        "коломийщина",
+        "коломийщині",
+        "коломийщину"
+      ],
+      "level": 1,
+      "distance_km": 55.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": 0.75,
+      "n_outcomes": 2,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Коломиї"
+    },
+    "rohatyn": {
+      "id": "rohatyn",
+      "names": [
+        "рогатин",
+        "рогатина",
+        "рогатині",
+        "рогатином",
+        "рогатинський район",
+        "рогатинського району",
+        "рогатинському районі",
+        "рогатинським районом",
+        "рогатинщина",
+        "рогатинщині",
+        "рогатинщину"
+      ],
+      "level": 1,
+      "distance_km": 60.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": 0.143,
+      "n_outcomes": 5,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Рогатина"
+    },
+    "horodenka": {
+      "id": "horodenka",
+      "names": [
+        "городенка",
+        "городенки",
+        "городенку",
+        "городенці",
+        "городенкою",
+        "городенківський район",
+        "городенківського району",
+        "городенківському районі",
+        "городенківським районом"
+      ],
+      "level": 1,
+      "distance_km": 65.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Городенки"
+    },
+    "chortkiv": {
+      "id": "chortkiv",
+      "names": [
+        "чортків",
+        "чорткова",
+        "чорткові",
+        "чортковом",
+        "чортківський район",
+        "чортківського району",
+        "чортківському районі",
+        "чортківським районом",
+        "чортківщина",
+        "чортківщині",
+        "чортківщину"
+      ],
+      "level": 2,
+      "distance_km": 82.0,
+      "eta_min": 9.0,
+      "eta_max": 15.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "zalishchyky": {
+      "id": "zalishchyky",
+      "names": [
+        "заліщики",
+        "заліщиках",
+        "заліщиків",
+        "заліщиками",
+        "заліщицький район",
+        "заліщицького району",
+        "заліщицькому районі",
+        "заліщицьким районом"
+      ],
+      "level": 2,
+      "distance_km": 81.0,
+      "eta_min": 9.0,
+      "eta_max": 15.0,
+      "eta_method": "prior",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": false,
+      "is_contextual": false,
+      "name_gen": ""
+    },
+    "dolyna": {
+      "id": "dolyna",
+      "names": [
+        "долина",
+        "долини",
+        "долину",
+        "долині",
+        "долиною",
+        "долинський район",
+        "долинського району",
+        "долинському районі",
+        "долинським районом",
+        "долинщина",
+        "долинщині",
+        "долинщину"
+      ],
+      "level": 1,
+      "distance_km": 50.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Долини"
+    },
+    "nadvirna": {
+      "id": "nadvirna",
+      "names": [
+        "надвірна",
+        "надвірної",
+        "надвірну",
+        "надвірній",
+        "надвірною",
+        "надвірнянський район",
+        "надвірнянського району",
+        "надвірнянському районі",
+        "надвірнянським районом",
+        "надвірнянщина",
+        "надвірнянщині",
+        "надвірнянщину"
+      ],
+      "level": 1,
+      "distance_km": 29.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Надвірної"
+    },
+    "sniatyn": {
+      "id": "sniatyn",
+      "names": [
+        "снятин",
+        "снятина",
+        "снятині",
+        "снятином",
+        "снятинський район",
+        "снятинського району",
+        "снятинському районі",
+        "снятинським районом",
+        "снятинщина",
+        "снятинщині",
+        "снятинщину"
+      ],
+      "level": 1,
+      "distance_km": 80.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Снятина"
+    },
+    "voinyliv": {
+      "id": "voinyliv",
+      "names": [
+        "войнилів",
+        "войнилова",
+        "войнилові",
+        "войниловом",
+        "войнилівський",
+        "войнилівського"
+      ],
+      "level": 1,
+      "distance_km": 30.0,
+      "eta_min": null,
+      "eta_max": null,
+      "eta_method": "none",
+      "n_obs": 0,
+      "base_rate": null,
+      "n_outcomes": 0,
+      "is_regional": true,
+      "is_contextual": false,
+      "name_gen": "Войнилова"
+    }
+  },
+  "speed_kmh": [
+    380.0,
+    500.0
+  ],
+  "conventional_speed_kmh": [
+    150.0,
+    185.0
+  ],
+  "missile_speed_kmh": [
+    750.0,
+    880.0
+  ],
+  "post_lag_min": [
+    0.5,
+    1.5
+  ],
+  "target_keywords": [
+    "реактивна герань",
+    "реактивні герані",
+    "реактивний шахед",
+    "реактивні шахеди",
+    "реактивний бпла",
+    "реактивні бпла",
+    "шахед-238",
+    "геран-3",
+    "реактив",
+    "джет",
+    "герань-3",
+    "геран-5",
+    "герань-5",
+    "ракета-дрон",
+    "ракети-дрони",
+    "бандероль",
+    "бандеролі"
+  ],
+  "cancel_keywords": [
+    "вибух",
+    "збит",
+    "локаційно втрачен",
+    "дорозвідка",
+    "відбій",
+    "на рівне",
+    "на рівненщину",
+    "на волинь",
+    "на житомир",
+    "на житомирщину",
+    "на тернопіль",
+    "на хмельницький",
+    "на городок",
+    "повз городок",
+    "на волочиськ",
+    "на сатанів",
+    "на закупне",
+    "повз закупне",
+    "на смотрич",
+    "на ярмолинці",
+    "на чемерівці",
+    "на старокостянтинів",
+    "на шепетівку",
+    "на стару синяву",
+    "на старий остропіль",
+    "на полонне",
+    "на гриців",
+    "на антоніни",
+    "на чорний острів",
+    "повз чорний острів",
+    "на війтівці",
+    "повз війтівці",
+    "на меджибіж",
+    "повз меджибіж",
+    "на головчинці",
+    "на голосків",
+    "на пилявку",
+    "на волоське",
+    "на галузинці",
+    "на копайгород",
+    "повз копайгород",
+    "на копичинці",
+    "на хоростків",
+    "на теребовлю",
+    "на микулинці",
+    "повз микулинці",
+    "на козову",
+    "на гусятин",
+    "на ланівці",
+    "на вишнівець",
+    "на кременець",
+    "на шумськ",
+    "на збараж",
+    "на дубно",
+    "на поморяни",
+    "на перемишляни",
+    "на львів",
+    "на львівщину",
+    "на винники",
+    "на бібрку",
+    "на пустомити",
+    "на ходорів",
+    "в бік ходорів",
+    "на жидачів",
+    "на бережани",
+    "на скалат",
+    "на гримайлів",
+    "на миколаїв",
+    "на новий розділ",
+    "на радехів",
+    "на лопатин",
+    "на шаргород",
+    "повз шаргород",
+    "на могилів-подільський",
+    "повз могилів-подільський",
+    "на територію молдови",
+    "на віньківці",
+    "повз віньківці",
+    "на красилів",
+    "повз красилів",
+    "на деражню",
+    "повз деражню",
+    "до деражні",
+    "на деражні",
+    "на вовковинці",
+    "на кучу",
+    "на підгайці",
+    "повз підгайці",
+    "на смигу",
+    "повз смигу",
+    "на давидів",
+    "повз давидів",
+    "на стрий",
+    "повз стрий",
+    "в бік стрия",
+    "у бік стрия",
+    "на чернівці",
+    "повз чернівці",
+    "в бік чернівців",
+    "у бік чернівців",
+    "на буковину",
+    "на заставну",
+    "повз заставну",
+    "на сокиряни",
+    "повз сокиряни",
+    "відбій на заході"
+  ],
+  "stopwords": [
+    "україна",
+    "увага",
+    "оновлення",
+    "upd",
+    "захід",
+    "схід",
+    "північ",
+    "південь",
+    "повітряні",
+    "сили",
+    "реактивна",
+    "реактивний",
+    "реактивні",
+    "герань",
+    "шахед",
+    "бпла",
+    "іф",
+    "франківськ",
+    "івано-франківськ",
+    "тернопіль",
+    "хмельницький",
+    "волинь",
+    "буковина",
+    "поділля"
+  ],
+  "changelog": [
+    "Новий пункт з профілю chortkiv (рівень 2)",
+    "Новий пункт з профілю zalishchyky (рівень 2)",
+    "Новий пункт з профілю dolyna (рівень 1)",
+    "Новий пункт з профілю nadvirna (рівень 1)",
+    "Новий пункт з профілю sniatyn (рівень 1)",
+    "Новий пункт з профілю voinyliv (рівень 1)",
+    "Слова скасування з профілю: +13"
+  ],
+  "metrics": {
+    "n_labeled_targets": 197,
+    "n_arrival_obs": 139,
+    "fit_on_all": {
+      "n": 137,
+      "coverage": 0.766,
+      "mean_width_min": 7.7,
+      "per_point": {
+        "kamianets_podilskyi": {
+          "hits": 11,
+          "n": 18
+        },
+        "pishchanka": {
+          "hits": 4,
+          "n": 6
+        },
+        "nova_ushytsia": {
+          "hits": 13,
+          "n": 16
+        },
+        "skala_podilska": {
+          "hits": 6,
+          "n": 7
+        },
+        "tlumach": {
+          "hits": 10,
+          "n": 15
+        },
+        "tomashpil": {
+          "hits": 2,
+          "n": 2
+        },
+        "vendychany": {
+          "hits": 6,
+          "n": 6
+        },
+        "borshchiv": {
+          "hits": 12,
+          "n": 18
+        },
+        "tovste": {
+          "hits": 4,
+          "n": 5
+        },
+        "tysmenytsia": {
+          "hits": 5,
+          "n": 6
+        },
+        "khryplyn": {
+          "hits": 8,
+          "n": 8
+        },
+        "stara_ushytsia": {
+          "hits": 5,
+          "n": 8
+        },
+        "dunaivtsi": {
+          "hits": 7,
+          "n": 8
+        },
+        "chernelytsia": {
+          "hits": 5,
+          "n": 5
+        },
+        "buchach": {
+          "hits": 1,
+          "n": 1
+        },
+        "if_direct_course": {
+          "hits": 1,
+          "n": 2
+        },
+        "ivano_frankivsk": {
+          "hits": 1,
+          "n": 1
+        },
+        "monastyryska": {
+          "hits": 1,
+          "n": 1
+        },
+        "ternopil_if_course": {
+          "hits": 2,
+          "n": 3
+        },
+        "yezupil": {
+          "hits": 1,
+          "n": 1
+        }
+      }
+    },
+    "holdout": {
+      "targets": 16,
+      "active": {
+        "n": 47,
+        "coverage": 0.66,
+        "mean_width_min": 7.2,
+        "per_point": {
+          "borshchiv": {
+            "hits": 3,
+            "n": 3
+          },
+          "chernelytsia": {
+            "hits": 4,
+            "n": 4
+          },
+          "khryplyn": {
+            "hits": 4,
+            "n": 4
+          },
+          "tlumach": {
+            "hits": 3,
+            "n": 5
+          },
+          "tovste": {
+            "hits": 1,
+            "n": 2
+          },
+          "tysmenytsia": {
+            "hits": 2,
+            "n": 2
+          },
+          "kamianets_podilskyi": {
+            "hits": 4,
+            "n": 7
+          },
+          "nova_ushytsia": {
+            "hits": 0,
+            "n": 3
+          },
+          "stara_ushytsia": {
+            "hits": 2,
+            "n": 5
+          },
+          "buchach": {
+            "hits": 1,
+            "n": 1
+          },
+          "if_direct_course": {
+            "hits": 1,
+            "n": 2
+          },
+          "ivano_frankivsk": {
+            "hits": 1,
+            "n": 1
+          },
+          "monastyryska": {
+            "hits": 1,
+            "n": 1
+          },
+          "ternopil_if_course": {
+            "hits": 2,
+            "n": 3
+          },
+          "yezupil": {
+            "hits": 1,
+            "n": 1
+          },
+          "dunaivtsi": {
+            "hits": 1,
+            "n": 2
+          },
+          "skala_podilska": {
+            "hits": 0,
+            "n": 1
+          }
+        }
+      },
+      "candidate": {
+        "n": 47,
+        "coverage": 0.638,
+        "mean_width_min": 6.1,
+        "per_point": {
+          "borshchiv": {
+            "hits": 3,
+            "n": 3
+          },
+          "chernelytsia": {
+            "hits": 4,
+            "n": 4
+          },
+          "khryplyn": {
+            "hits": 4,
+            "n": 4
+          },
+          "tlumach": {
+            "hits": 3,
+            "n": 5
+          },
+          "tovste": {
+            "hits": 1,
+            "n": 2
+          },
+          "tysmenytsia": {
+            "hits": 2,
+            "n": 2
+          },
+          "kamianets_podilskyi": {
+            "hits": 2,
+            "n": 7
+          },
+          "nova_ushytsia": {
+            "hits": 0,
+            "n": 3
+          },
+          "stara_ushytsia": {
+            "hits": 3,
+            "n": 5
+          },
+          "buchach": {
+            "hits": 1,
+            "n": 1
+          },
+          "if_direct_course": {
+            "hits": 1,
+            "n": 2
+          },
+          "ivano_frankivsk": {
+            "hits": 1,
+            "n": 1
+          },
+          "monastyryska": {
+            "hits": 1,
+            "n": 1
+          },
+          "ternopil_if_course": {
+            "hits": 2,
+            "n": 3
+          },
+          "yezupil": {
+            "hits": 1,
+            "n": 1
+          },
+          "dunaivtsi": {
+            "hits": 1,
+            "n": 2
+          },
+          "skala_podilska": {
+            "hits": 0,
+            "n": 1
+          }
+        }
+      }
+    },
+    "gates": {
+      "enough_holdout": true,
+      "coverage_not_worse": false,
+      "width_ok": true
+    }
+  }
+}
