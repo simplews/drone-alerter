@@ -43,6 +43,8 @@ class PointRef:
     is_regional: bool = False
     is_contextual: bool = False
     name_gen: str = ""
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -222,6 +224,8 @@ class ActiveReferenceCache:
                             is_regional=bool(item.get("is_regional", False)),
                             is_contextual=bool(item.get("is_contextual", False)),
                             name_gen=str(item.get("name_gen", "")),
+                            lat=float(item["lat"]) if item.get("lat") is not None else None,
+                            lon=float(item["lon"]) if item.get("lon") is not None else None,
                         )
                     else:
                         if "is_regional" in item:
@@ -230,6 +234,10 @@ class ActiveReferenceCache:
                             ref.points[pid].is_contextual = bool(item["is_contextual"])
                         if "name_gen" in item:
                             ref.points[pid].name_gen = str(item["name_gen"])
+                        if item.get("lat") is not None:
+                            ref.points[pid].lat = float(item["lat"])
+                        if item.get("lon") is not None:
+                            ref.points[pid].lon = float(item["lon"])
                         for name in item.get("names", []):
                             if name not in ref.points[pid].names:
                                 ref.points[pid].names.append(name)
@@ -258,6 +266,8 @@ def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
             is_regional=bool(item.get("is_regional", False)),
             is_contextual=bool(item.get("is_contextual", False)),
             name_gen=str(item.get("name_gen", "")),
+            lat=float(item["lat"]) if item.get("lat") is not None else None,
+            lon=float(item["lon"]) if item.get("lon") is not None else None,
         )
     return ReferenceData(
         points=points,

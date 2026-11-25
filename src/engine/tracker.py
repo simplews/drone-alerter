@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import uuid
 from collections.abc import Callable
@@ -56,6 +57,16 @@ _CARDINAL_DEST_RE = re.compile(
 )
 
 
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometers between two WGS84 coordinates."""
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
+    return 2.0 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
 class TargetTracker:
     """Manage the active target hypotheses, the deduplication between channels and the creation of alerts."""
 
@@ -93,6 +104,8 @@ class TargetTracker:
         is_regional: bool,
         dest: str | None,
         is_contextual: bool = False,
+        time_diff_min: float | None = None,
+        is_explicit_divert: bool = False,
     ) -> bool:
         """Check if an unanchored divert destination is geographically compatible with the target's corridor position."""
         dest_norm = normalize(dest) if dest else ""
@@ -121,16 +134,34 @@ class TargetTracker:
 
         # 2. Targets in Southern Ternopilska oblast (65 < d < 120 km: Skala-Podilska, Borshchiv, Tovste)
         if target_dist_km < 120.0:
-            return not bool(
-                dest_norm and (_EAST_UPSTREAM_DEST_RE.search(dest_norm) or _KHMELNYTSKYI_DEST_RE.search(dest_norm))
+            if dest_norm and (_EAST_UPSTREAM_DEST_RE.search(dest_norm) or _KHMELNYTSKYI_DEST_RE.search(dest_norm)):
+                return False
+            # Far Lviv oblast digests (~140-200 km away) cannot divert a southern Ternopil target within minutes
+            return not (
+                not is_explicit_divert
+                and dest_norm
+                and _LVIV_BORDER_DEST_RE.search(dest_norm)
+                and time_diff_min is not None
+                and time_diff_min < 10.0
             )
 
-        # 3. Targets in Southern Khmelnytskyi (120 <= d <= 195 km: Kamianets-Podilskyi, Dunaivtsi, Stara/Nova Ushytsia)
+        # 3. Targets in Southern Khmelnytskyi / Bukovyna (120 <= d <= 195 km: Kamianets-Podilskyi, Dunaivtsi, Kelmentsi, Stara/Nova Ushytsia)
         if target_dist_km <= 195.0:
-            # Shargorod is upstream in Vinnytsia (~235 km) and cannot divert a target already at Kamianets/Dunaivtsi
-            return not bool(dest_norm and re.search(r"(?i)\bшаргород\w*\b", dest_norm) and target_dist_km < 180.0)
+            # Upstream Vinnytsia destinations (Shargorod, Kopaihorod, etc.) cannot divert a target already in Khmelnytskyi
+            if dest_norm and _EAST_UPSTREAM_DEST_RE.search(dest_norm) and target_dist_km < 180.0:
+                return False
+            # Standalone Lviv/Ternopil digests (~180-250 km away) cannot divert a Khmelnytskyi/Bukovyna target within minutes
+            return not (
+                not is_explicit_divert
+                and dest_norm
+                and (_LVIV_BORDER_DEST_RE.search(dest_norm) or _TERNOPIL_LVIV_DEST_RE.search(dest_norm))
+                and time_diff_min is not None
+                and time_diff_min < 15.0
+            )
 
-        # 4. Far upstream targets in Vinnytsia (> 195 km: Pishchanka, Vendychany, Murovani Kyrylivtsi)
+        # 4. Far upstream targets in Vinnytsia (> 195 km: Pishchanka, Tomashpil, Vendychany, Murovani Kyrylivtsi)
+        if not is_explicit_divert and dest_norm and not (_EAST_UPSTREAM_DEST_RE.search(dest_norm) or _CARDINAL_DEST_RE.search(dest_norm)):
+            return bool(_KHMELNYTSKYI_DEST_RE.search(dest_norm) and (time_diff_min is None or time_diff_min >= 10.0))
         return True
 
     def _find_matching_target(
@@ -175,12 +206,39 @@ class TargetTracker:
                 continue
 
             time_diff = abs(posted_at - target.last_seen_utc)
-            if time_diff > self._max_gap:
+            if target.drone_type == DroneType.MISSILE:
+                effective_max_gap = min(self._max_gap, timedelta(minutes=12))
+            elif target.drone_type == DroneType.JET:
+                effective_max_gap = min(self._max_gap, timedelta(minutes=20))
+            else:
+                effective_max_gap = self._max_gap
+            if time_diff > effective_max_gap:
                 continue
 
             last_point = ref.points.get(target.last_point_id)
             if not last_point:
                 continue
+
+            time_diff_min = time_diff.total_seconds() / 60.0
+
+            # Geographic (2D) plausibility check when coordinates are available on both points:
+            # prevents cross-sector merging (e.g. Lviv NW -> Horodenka SE, or Dolyna SW -> Rohatyn N)
+            geo_km: float | None = None
+            if (
+                last_point.lat is not None
+                and last_point.lon is not None
+                and new_point.lat is not None
+                and new_point.lon is not None
+            ):
+                geo_km = _haversine_km(last_point.lat, last_point.lon, new_point.lat, new_point.lon)
+                if target.drone_type == DroneType.MISSILE:
+                    max_geo_km = 65.0 + time_diff_min * 16.0
+                elif target.drone_type == DroneType.JET:
+                    max_geo_km = 40.0 + time_diff_min * 9.0
+                else:
+                    max_geo_km = 25.0 + time_diff_min * 3.8
+                if geo_km > max_geo_km:
+                    continue
 
             # Prevent cross-corridor merging between central Khmelnytskyi (Dunaivtsi) and Bukovyna (Kelmentsi/Novodnistrovsk)
             if (
@@ -206,8 +264,6 @@ class TargetTracker:
                 and abs(last_point.distance_km - new_point.distance_km) > max_cross_corridor_km
             ):
                 continue
-
-            time_diff_min = time_diff.total_seconds() / 60.0
 
             # Check if this point matches the target track:
             # 1. Point already visited in this target's sequence (delayed report from another channel)
@@ -245,11 +301,12 @@ class TargetTracker:
                 is_lagged_upstream = True
 
             if is_in_sequence or is_same_point or is_forward or is_lagged_upstream:
-                dist_gap = (
-                    abs(last_point.distance_km - new_point.distance_km)
-                    if (last_point.distance_km and new_point.distance_km)
-                    else 0.0
-                )
+                if geo_km is not None:
+                    dist_gap = geo_km
+                elif last_point.distance_km and new_point.distance_km:
+                    dist_gap = abs(last_point.distance_km - new_point.distance_km)
+                else:
+                    dist_gap = 0.0
                 score = dist_gap + time_diff_min * 4.0
                 if score < best_score:
                     best_score = score
@@ -544,8 +601,20 @@ class TargetTracker:
                     cand_dist = p_cand.distance_km if p_cand else None
                     cand_reg = bool(getattr(p_cand, "is_regional", False)) if p_cand else False
                     cand_ctx = bool(getattr(p_cand, "is_contextual", False)) if p_cand else False
+                    time_diff_min = time_diff.total_seconds() / 60.0
+                    is_explicit_divert = bool(
+                        re.search(r"(?i)\b(відверну\w*|відверта\w*|змінил\w*\s+курс)\b", post.text)
+                    )
                     for d in dest_candidates:
-                        if self._is_divert_compatible(cand_dist, cand.level, cand_reg, d, is_contextual=cand_ctx):
+                        if self._is_divert_compatible(
+                            cand_dist,
+                            cand.level,
+                            cand_reg,
+                            d,
+                            is_contextual=cand_ctx,
+                            time_diff_min=time_diff_min,
+                            is_explicit_divert=is_explicit_divert,
+                        ):
                             target = cand
                             matched_dest = d
                             break
@@ -898,13 +967,13 @@ class TargetTracker:
 
                 body = (
                     "⚪️ Нових повідомлень про рух цілі в напрямку міста немає (час очікування минув). "
-                    "Імовірно, змінила курс, впала або була збита, однак загроза може повторитися. "
+                    "Імовірно, змінила курс або уражена/втрачена, однак загроза може повторитися. "
                     "Слідкуйте за офіційними повідомленнями."
                 )
                 alerts.append(AlertEvent(
                     target_id=target.id,
                     level=AlertLevel.INFO,
-                    title="Ціль змінила курс / втрачена / знищена",
+                    title="Ціль змінила курс або втрачена",
                     body=body,
                     is_silent=True,
                     source_links=source_links,

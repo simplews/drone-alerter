@@ -447,9 +447,9 @@ class TestTargetTracker(unittest.TestCase):
         self.assertNotIn("Тисмениця", div_alerts[0].body)
 
         # Target 1 (Tysmenytsia) ETA expired by 15:24, so it emitted a timeout alert
-        t1_timeout_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс / втрачена / знищена"]
+        t1_timeout_alerts = [a for a in alerts_div if a.title == "Ціль змінила курс або втрачена"]
         self.assertEqual(len(t1_timeout_alerts), 1)
-        self.assertIn("впала або була збита", t1_timeout_alerts[0].body)
+        self.assertIn("уражена/втрачена", t1_timeout_alerts[0].body)
 
     def test_conventional_shahed_eta_and_title(self):
         # Conventional Shahed reported at Nova Ushytsia (187 km)
@@ -1082,6 +1082,27 @@ class TestTargetTracker(unittest.TestCase):
         self.assertEqual(len(alerts_stryi), 1)
         self.assertEqual(alerts_stryi[0].title, "Ціль змінила курс")
         self.assertIn("Стрий", alerts_stryi[0].body)
+
+    def test_cross_oblast_digest_does_not_falsely_divert_upstream_target(self):
+        """A standalone Lviv oblast digest 3 minutes later must not divert a Vinnytsia/Bukovyna target."""
+        t0 = datetime(2026, 11, 20, 2, 26, 0, tzinfo=UTC)
+        p_vin = RawPost("chan_a", 1, "Вінниччина:\n1 реактивна герань на Муровані Курилівці", t0)
+        self.tracker.process_message(p_vin, self.normalizer.parse(p_vin), now=t0)
+
+        p_lviv = RawPost("chan_a", 2, "Львівщина:\n1 реактивна герань на Лопатин", t0 + timedelta(minutes=3))
+        alerts = self.tracker.process_message(p_lviv, self.normalizer.parse(p_lviv), now=t0 + timedelta(minutes=3))
+        self.assertEqual([a for a in alerts if a.title == "Ціль змінила курс"], [])
+        self.assertEqual(len(self.tracker.get_active_targets()), 1)
+
+    def test_cross_sector_missiles_do_not_merge_lviv_with_horodenka(self):
+        """A missile in Lviv oblast (NW) must not merge with a missile in Horodenka (SE) 4 minutes later."""
+        t0 = datetime(2026, 11, 20, 4, 50, 0, tzinfo=UTC)
+        p_lviv = RawPost("chan_a", 10, "2 калібри в бік Львова", t0)
+        self.tracker.process_message(p_lviv, self.normalizer.parse(p_lviv), now=t0)
+
+        p_hor = RawPost("chan_a", 11, "Івано-Франківщина:\nГрупа калібрів на Городенку", t0 + timedelta(minutes=4))
+        self.tracker.process_message(p_hor, self.normalizer.parse(p_hor), now=t0 + timedelta(minutes=4))
+        self.assertEqual(len(self.tracker.get_active_targets()), 2)
 
 
 if __name__ == "__main__":
