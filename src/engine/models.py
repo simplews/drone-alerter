@@ -35,6 +35,7 @@ class TargetStatus(str, Enum):
 class DroneType(str, Enum):
     JET = "jet"
     CONVENTIONAL = "conventional"
+    MISSILE = "missile"
 
 
 @dataclass
@@ -44,6 +45,7 @@ class RawPost:
     text: str
     posted_at_utc: datetime
     is_edit: bool = False
+    reply_to_message_id: int | None = None
 
 
 @dataclass
@@ -56,6 +58,8 @@ class ParsedMessage:
     action: ActionType = ActionType.NONE
     action_point_id: str | None = None
     divert_destination: str | None = None
+    divert_destinations: list[str] = field(default_factory=list)
+    point_groups: list[list[str]] = field(default_factory=list)
     drone_type: DroneType = DroneType.CONVENTIONAL
     target_type: str | None = None
     raw_text: str = ""
@@ -81,6 +85,7 @@ class Target:
     confidence: str = "low"     # low, medium, high
     channels: set[str] = field(default_factory=set)
     message_ids: list[tuple[str, int]] = field(default_factory=list)
+    alerted: bool = False
 
 
 @dataclass

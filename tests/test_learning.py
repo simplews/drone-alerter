@@ -252,6 +252,18 @@ class PipelineTests(unittest.TestCase):
         row3 = self.store.conn.execute("SELECT outcome FROM targets WHERE id='T_LVL3'").fetchone()
         self.assertEqual(row3["outcome"], OUTCOME_DOWNED)
 
+    def test_build_candidate_preserves_regional_and_contextual_points(self):
+        active = self.repo.active()
+        cand = build_candidate(active, [], [], [], CalibrationConfig())
+        # Regional points must keep is_regional=True and eta_min/eta_max=None
+        self.assertTrue(cand.points["kolomyia"].is_regional)
+        self.assertIsNone(cand.points["kolomyia"].eta_min)
+        self.assertIsNone(cand.points["kolomyia"].eta_max)
+        # Contextual missile corridor points must keep is_contextual=True and their missile seed ETA
+        self.assertTrue(cand.points["khmelnytskyi_missile"].is_contextual)
+        self.assertEqual(cand.points["khmelnytskyi_missile"].eta_min, 14.0)
+        self.assertEqual(cand.points["khmelnytskyi_missile"].eta_max, 17.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,7 +41,10 @@ class PointRef:
     base_rate: float | None = None
     n_outcomes: int = 0
     is_regional: bool = False
+    is_contextual: bool = False
     name_gen: str = ""
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -53,6 +56,7 @@ class ReferenceData:
     points: dict[str, PointRef] = field(default_factory=dict)
     speed_kmh: list[float] = field(default_factory=lambda: [400.0, 480.0])
     conventional_speed_kmh: list[float] = field(default_factory=lambda: [150.0, 185.0])
+    missile_speed_kmh: list[float] = field(default_factory=lambda: [750.0, 880.0])
     # Publication time noise (minutes). It covers the delay of the first mention and
     # of the arrival message.
     post_lag_min: list[float] = field(default_factory=lambda: [0.5, 1.5])
@@ -80,6 +84,8 @@ class ReferenceData:
         """Normalized name -> point ID."""
         index: dict[str, str] = {}
         for pid, point in self.points.items():
+            if getattr(point, "is_contextual", False):
+                continue
             for name in point.names:
                 index[normalize(name)] = pid
         return index
@@ -192,6 +198,8 @@ class ActiveReferenceCache:
                 profile = get_profile()
                 if hasattr(profile, "conventional_speed_kmh") and profile.conventional_speed_kmh:
                     ref.conventional_speed_kmh = list(profile.conventional_speed_kmh)
+                if hasattr(profile, "missile_speed_kmh") and profile.missile_speed_kmh:
+                    ref.missile_speed_kmh = list(profile.missile_speed_kmh)
                 for kw in profile.target_keywords:
                     if kw not in ref.target_keywords:
                         ref.target_keywords.append(kw)
@@ -214,13 +222,22 @@ class ActiveReferenceCache:
                             eta_max=float(eta_max) if has_eta else None,
                             eta_method="profile_seed" if has_eta else "none",
                             is_regional=bool(item.get("is_regional", False)),
+                            is_contextual=bool(item.get("is_contextual", False)),
                             name_gen=str(item.get("name_gen", "")),
+                            lat=float(item["lat"]) if item.get("lat") is not None else None,
+                            lon=float(item["lon"]) if item.get("lon") is not None else None,
                         )
                     else:
                         if "is_regional" in item:
                             ref.points[pid].is_regional = bool(item["is_regional"])
+                        if "is_contextual" in item:
+                            ref.points[pid].is_contextual = bool(item["is_contextual"])
                         if "name_gen" in item:
                             ref.points[pid].name_gen = str(item["name_gen"])
+                        if item.get("lat") is not None:
+                            ref.points[pid].lat = float(item["lat"])
+                        if item.get("lon") is not None:
+                            ref.points[pid].lon = float(item["lon"])
                         for name in item.get("names", []):
                             if name not in ref.points[pid].names:
                                 ref.points[pid].names.append(name)
@@ -247,12 +264,16 @@ def seed_from_profile(profile: CityProfile | None = None) -> ReferenceData:
             eta_max=float(eta_max) if has_eta else None,
             eta_method="seed" if has_eta else "none",
             is_regional=bool(item.get("is_regional", False)),
+            is_contextual=bool(item.get("is_contextual", False)),
             name_gen=str(item.get("name_gen", "")),
+            lat=float(item["lat"]) if item.get("lat") is not None else None,
+            lon=float(item["lon"]) if item.get("lon") is not None else None,
         )
     return ReferenceData(
         points=points,
         speed_kmh=list(profile.speed_kmh),
         conventional_speed_kmh=list(getattr(profile, "conventional_speed_kmh", [150.0, 185.0])),
+        missile_speed_kmh=list(getattr(profile, "missile_speed_kmh", [750.0, 880.0])),
         post_lag_min=list(profile.post_lag_min),
         target_keywords=list(profile.target_keywords),
         cancel_keywords=list(profile.cancel_keywords),
